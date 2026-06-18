@@ -1,14 +1,12 @@
 (ns components.rec-demo.charts
-  "Recharts-based charts for the rec-redesign prototype.
+  "Recharts-based charts for the rec-redesign PROTOTYPE (v2).
 
-   PROTOTYPE ONLY. Data is hardcoded from the SLU BSN exemplar v7 — see
-   components.rec-demo.data. Recharts (^2.15.4, already in package.json) is the
-   app's charting library per the redesign plan; this is the first Recharts
-   interop in the CLJS app.
+   PROTOTYPE ONLY. Data is hardcoded from the SLU BSN exemplar — see
+   components.rec-demo.data. Recharts (^2.15.4) is the app's charting library.
 
-   Styling matches the two reference PNGs Tavidee supplied (bold centered title,
-   boxed legend, light dashed gridlines, dark bold value labels, italic source
-   caption)."
+   v2 branding (Build Plan §1): earnings bars in BOLD TEAL (#05a09c); the two
+   cost-of-living bars in NEUTRAL GRAY (#676868) so earnings vs. cost-of-living
+   read apart at a glance. Per-bar color comes from each datum's :fill."
   (:require [uix.core :as uix :refer [defui $]]
             [clojure.string :as str]
             ["recharts" :refer [ResponsiveContainer BarChart Bar
@@ -16,16 +14,16 @@
                                 Cell LabelList]]))
 
 ;; ============================================================================
-;; Palette
+;; Palette — TEAL lead (Senior & Advising team), per the team color system.
 ;; ============================================================================
 
-(def color-brand "#4f6fc4")      ;; earnings / cost-of-attendance bars (cornflower blue)
-(def color-muted "#94a3b8")      ;; neutral (available if CoL bars should be distinguished)
-(def color-net "#6fa84f")        ;; highlighted "your net cost" (green, matches PNG)
-(def color-deduction "#cbd5e1")
-(def color-grid "#e5e7eb")
-(def color-axis "#6b7280")
-(def color-label "#1f2937")
+(def color-earnings "#05a09c")   ;; bold teal — earnings bars
+(def color-col      "#676868")   ;; neutral gray — cost-of-living bars (deliberately non-teal)
+(def color-net      "#2a6465")   ;; dark teal — highlighted "your net cost" bar
+(def color-brand    color-earnings) ;; default bar fill alias
+(def color-grid  "#e5e7eb")
+(def color-axis  "#676868")
+(def color-label "#313335")
 
 ;; ============================================================================
 ;; Helpers
@@ -58,11 +56,12 @@
 ;; ============================================================================
 
 (defui chart-frame
-  "legend-items: optional vector of {:color :label} rows rendered in a bordered box."
+  "legend-items: optional vector of {:color :label} rows rendered in a bordered box.
+   source is optional — citations are NOT shown in the prototype (Build Plan §3.3)."
   [{:keys [title legend-items source children]}]
-  ($ :div {:class "bg-white/70 rounded-2xl shadow-sm p-5 md:p-6"}
+  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#bcdfe5] p-5 md:p-6"}
      (when title
-       ($ :h4 {:class "text-base md:text-lg font-bold text-slate-700 text-center mb-3"}
+       ($ :h4 {:class "text-base md:text-lg font-bold text-[#2a6465] text-center mb-3 font-head"}
           title))
      (when (seq legend-items)
        ($ :div {:class "flex justify-center mb-2"}
@@ -78,10 +77,11 @@
 
 ;; ============================================================================
 ;; Chart 1 — Salary vs. Cost of Living (vertical bars)
+;; Earnings bars teal, cost-of-living bars gray (per-bar :fill from data).
 ;; ============================================================================
 
 (defui salary-vs-col-chart
-  [{:keys [data title legend-items source]}]
+  [{:keys [data title legend-items source y-max]}]
   ($ chart-frame
      {:title title :legend-items legend-items :source source}
      ($ :div {:class "w-full" :style {:height 360}}
@@ -95,8 +95,7 @@
                         :interval 0
                         :tick multiline-x-tick
                         :height 60})
-              ($ YAxis {:domain #js [0 100000]
-                        :ticks #js [0 20000 40000 60000 80000 100000]
+              ($ YAxis {:domain #js [0 (or y-max 100000)]
                         :tickFormatter usd
                         :tickLine false
                         :axisLine false
@@ -104,10 +103,10 @@
                         :stroke color-axis
                         :width 64})
               ($ Tooltip {:formatter (fn [v] (usd v))
-                          :cursor #js {:fill "rgba(79,111,196,0.06)"}})
+                          :cursor #js {:fill "rgba(5,160,156,0.07)"}})
               ($ Bar {:dataKey "value" :radius #js [4 4 0 0] :isAnimationActive false}
                  (for [[i d] (map-indexed vector data)]
-                   ($ Cell {:key i :fill (:fill d color-brand)}))
+                   ($ Cell {:key i :fill (:fill d color-earnings)}))
                  ($ LabelList {:dataKey "label"
                                :position "top"
                                :fill color-label
@@ -115,16 +114,12 @@
                                :fontWeight "bold"})))))))
 
 ;; ============================================================================
-;; Chart 3 — Financial Aid step-down waterfall
-;;
-;; Matches the reference PNG: solid descending running-total bars, blue, with the
-;; final "Net Cost" bar green. NOTE: per the redesign plan we deliberately OMIT
-;; the "After Scholarships" step shown in the PNG — that deduction is illustrative
-;; (CareerOneStop), not real per-student data, and would misrepresent net cost.
+;; Chart 2 — Cost step-down waterfall (What It Costs You)
+;; Solid descending running-total bars; final "net cost" bar in dark teal.
 ;; ============================================================================
 
 (defui financial-aid-waterfall
-  [{:keys [data title legend-items source]}]
+  [{:keys [data title legend-items source y-max]}]
   ($ chart-frame
      {:title title :legend-items legend-items :source source}
      ($ :div {:class "w-full" :style {:height 360}}
@@ -138,8 +133,7 @@
                         :interval 0
                         :tick multiline-x-tick
                         :height 60})
-              ($ YAxis {:domain #js [0 25000]
-                        :ticks #js [0 5000 10000 15000 20000 25000]
+              ($ YAxis {:domain #js [0 (or y-max 25000)]
                         :tickFormatter usd
                         :tickLine false
                         :axisLine false
@@ -147,10 +141,10 @@
                         :stroke color-axis
                         :width 64})
               ($ Tooltip {:formatter (fn [v] (usd v))
-                          :cursor #js {:fill "rgba(79,111,196,0.06)"}})
+                          :cursor #js {:fill "rgba(5,160,156,0.07)"}})
               ($ Bar {:dataKey "value" :radius #js [4 4 0 0] :isAnimationActive false}
                  (for [[i d] (map-indexed vector data)]
-                   ($ Cell {:key i :fill (:fill d color-brand)}))
+                   ($ Cell {:key i :fill (:fill d color-earnings)}))
                  ($ LabelList {:dataKey "label"
                                :position "top"
                                :fill color-label

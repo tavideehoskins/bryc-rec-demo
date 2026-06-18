@@ -1,57 +1,31 @@
-From 9408805c27c86f48f35dd9bc30a54d957d264a01 Mon Sep 17 00:00:00 2001
-From: Tavidee Hoskins <246332205+tavideehoskins@users.noreply.github.com>
-Date: Wed, 3 Jun 2026 10:29:23 -0500
-Subject: [PATCH] Add rec UI redesign prototype (/rec-demo + standalone build)
-
-Clickable prototype of the proposed 3-level recommendation output
-(School card -> Programs + school sections -> per-program accordion),
-using hardcoded SLU BSN exemplar-v7 data. No Notion calls, no live
-routes changed.
-
-- components/rec_demo: core (page + hierarchy), charts (Recharts:
-  salary-vs-CoL bars + financial-aid waterfall), data (hardcoded
-  exemplar), interface, standalone entry
-- router: add unauthenticated /rec-demo route
-- shadow-cljs.edn: SPA push-state fallback for dev-http; :rec-demo
-  standalone build target for static hosting
-- rec-demo-site/index.html: host template for the static demo
-
-Live demo: https://tavideehoskins.github.io/bryc-rec-demo/
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
----
- ui/advising-hub/rec-demo-site/index.html      |  16 ++
- ui/advising-hub/shadow-cljs.edn               |  22 +-
- .../src/components/rec_demo/charts.cljs       | 158 +++++++++++
- .../src/components/rec_demo/core.cljs         | 260 ++++++++++++++++++
- .../src/components/rec_demo/data.cljs         | 188 +++++++++++++
- .../src/components/rec_demo/interface.cljs    |   4 +
- .../src/components/router/core.cljs           |   3 +
- ui/advising-hub/src/rec_demo/standalone.cljs  |  18 ++
- 8 files changed, 668 insertions(+), 1 deletion(-)
- create mode 100644 ui/advising-hub/rec-demo-site/index.html
- create mode 100644 ui/advising-hub/src/components/rec_demo/charts.cljs
- create mode 100644 ui/advising-hub/src/components/rec_demo/core.cljs
- create mode 100644 ui/advising-hub/src/components/rec_demo/data.cljs
- create mode 100644 ui/advising-hub/src/components/rec_demo/interface.cljs
- create mode 100644 ui/advising-hub/src/rec_demo/standalone.cljs
-
 diff --git a/ui/advising-hub/rec-demo-site/index.html b/ui/advising-hub/rec-demo-site/index.html
 new file mode 100644
-index 0000000..bcd4b53
+index 0000000..7009d89
 --- /dev/null
 +++ b/ui/advising-hub/rec-demo-site/index.html
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,28 @@
 +<!doctype html>
 +<html lang="en">
 +<head>
 +    <meta charset="UTF-8">
 +    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-+    <title>BRYC — Rec UI Prototype</title>
++    <title>BRYC — Personalized Recommendations</title>
++    <link rel="icon" type="image/png" href="assets/bryc-logo-white.png">
 +    <link rel="preconnect" href="https://fonts.googleapis.com">
 +    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
++    <!-- Body = Open Sans (per brand). Headers/numbers = Proxima Nova in production
++         (Adobe/Typekit license required); Montserrat is the closest free stand-in
++         loaded here for the demo. TODO(brand): swap Montserrat → Proxima Nova kit. -->
++    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 +    <link rel="stylesheet" href="main.css">
++    <style>
++      :root {
++        --font-body: "Open Sans", system-ui, sans-serif;
++        --font-head: "Proxima Nova", "Montserrat", system-ui, sans-serif;
++      }
++      body { font-family: var(--font-body); }
++      h1, h2, h3, h4, .font-head, .tabular-nums { font-family: var(--font-head); }
++    </style>
 +</head>
 +<body>
 +    <div id="root"></div>
@@ -100,21 +74,19 @@ index 6be237f..03a9af1 100644
                  :js-options {:resolve {"gen" "dist/gen"}}}}}}
 diff --git a/ui/advising-hub/src/components/rec_demo/charts.cljs b/ui/advising-hub/src/components/rec_demo/charts.cljs
 new file mode 100644
-index 0000000..5e65d12
+index 0000000..71e0224
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/charts.cljs
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,152 @@
 +(ns components.rec-demo.charts
-+  "Recharts-based charts for the rec-redesign prototype.
++  "Recharts-based charts for the rec-redesign PROTOTYPE (v2).
 +
-+   PROTOTYPE ONLY. Data is hardcoded from the SLU BSN exemplar v7 — see
-+   components.rec-demo.data. Recharts (^2.15.4, already in package.json) is the
-+   app's charting library per the redesign plan; this is the first Recharts
-+   interop in the CLJS app.
++   PROTOTYPE ONLY. Data is hardcoded from the SLU BSN exemplar — see
++   components.rec-demo.data. Recharts (^2.15.4) is the app's charting library.
 +
-+   Styling matches the two reference PNGs Tavidee supplied (bold centered title,
-+   boxed legend, light dashed gridlines, dark bold value labels, italic source
-+   caption)."
++   v2 branding (Build Plan §1): earnings bars in BOLD TEAL (#05a09c); the two
++   cost-of-living bars in NEUTRAL GRAY (#676868) so earnings vs. cost-of-living
++   read apart at a glance. Per-bar color comes from each datum's :fill."
 +  (:require [uix.core :as uix :refer [defui $]]
 +            [clojure.string :as str]
 +            ["recharts" :refer [ResponsiveContainer BarChart Bar
@@ -122,16 +94,16 @@ index 0000000..5e65d12
 +                                Cell LabelList]]))
 +
 +;; ============================================================================
-+;; Palette
++;; Palette — TEAL lead (Senior & Advising team), per the team color system.
 +;; ============================================================================
 +
-+(def color-brand "#4f6fc4")      ;; earnings / cost-of-attendance bars (cornflower blue)
-+(def color-muted "#94a3b8")      ;; neutral (available if CoL bars should be distinguished)
-+(def color-net "#6fa84f")        ;; highlighted "your net cost" (green, matches PNG)
-+(def color-deduction "#cbd5e1")
-+(def color-grid "#e5e7eb")
-+(def color-axis "#6b7280")
-+(def color-label "#1f2937")
++(def color-earnings "#05a09c")   ;; bold teal — earnings bars
++(def color-col      "#676868")   ;; neutral gray — cost-of-living bars (deliberately non-teal)
++(def color-net      "#2a6465")   ;; dark teal — highlighted "your net cost" bar
++(def color-brand    color-earnings) ;; default bar fill alias
++(def color-grid  "#e5e7eb")
++(def color-axis  "#676868")
++(def color-label "#313335")
 +
 +;; ============================================================================
 +;; Helpers
@@ -164,11 +136,12 @@ index 0000000..5e65d12
 +;; ============================================================================
 +
 +(defui chart-frame
-+  "legend-items: optional vector of {:color :label} rows rendered in a bordered box."
++  "legend-items: optional vector of {:color :label} rows rendered in a bordered box.
++   source is optional — citations are NOT shown in the prototype (Build Plan §3.3)."
 +  [{:keys [title legend-items source children]}]
-+  ($ :div {:class "bg-white/70 rounded-2xl shadow-sm p-5 md:p-6"}
++  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#bcdfe5] p-5 md:p-6"}
 +     (when title
-+       ($ :h4 {:class "text-base md:text-lg font-bold text-slate-700 text-center mb-3"}
++       ($ :h4 {:class "text-base md:text-lg font-bold text-[#2a6465] text-center mb-3 font-head"}
 +          title))
 +     (when (seq legend-items)
 +       ($ :div {:class "flex justify-center mb-2"}
@@ -184,10 +157,11 @@ index 0000000..5e65d12
 +
 +;; ============================================================================
 +;; Chart 1 — Salary vs. Cost of Living (vertical bars)
++;; Earnings bars teal, cost-of-living bars gray (per-bar :fill from data).
 +;; ============================================================================
 +
 +(defui salary-vs-col-chart
-+  [{:keys [data title legend-items source]}]
++  [{:keys [data title legend-items source y-max]}]
 +  ($ chart-frame
 +     {:title title :legend-items legend-items :source source}
 +     ($ :div {:class "w-full" :style {:height 360}}
@@ -201,8 +175,7 @@ index 0000000..5e65d12
 +                        :interval 0
 +                        :tick multiline-x-tick
 +                        :height 60})
-+              ($ YAxis {:domain #js [0 100000]
-+                        :ticks #js [0 20000 40000 60000 80000 100000]
++              ($ YAxis {:domain #js [0 (or y-max 100000)]
 +                        :tickFormatter usd
 +                        :tickLine false
 +                        :axisLine false
@@ -210,10 +183,10 @@ index 0000000..5e65d12
 +                        :stroke color-axis
 +                        :width 64})
 +              ($ Tooltip {:formatter (fn [v] (usd v))
-+                          :cursor #js {:fill "rgba(79,111,196,0.06)"}})
++                          :cursor #js {:fill "rgba(5,160,156,0.07)"}})
 +              ($ Bar {:dataKey "value" :radius #js [4 4 0 0] :isAnimationActive false}
 +                 (for [[i d] (map-indexed vector data)]
-+                   ($ Cell {:key i :fill (:fill d color-brand)}))
++                   ($ Cell {:key i :fill (:fill d color-earnings)}))
 +                 ($ LabelList {:dataKey "label"
 +                               :position "top"
 +                               :fill color-label
@@ -221,16 +194,12 @@ index 0000000..5e65d12
 +                               :fontWeight "bold"})))))))
 +
 +;; ============================================================================
-+;; Chart 3 — Financial Aid step-down waterfall
-+;;
-+;; Matches the reference PNG: solid descending running-total bars, blue, with the
-+;; final "Net Cost" bar green. NOTE: per the redesign plan we deliberately OMIT
-+;; the "After Scholarships" step shown in the PNG — that deduction is illustrative
-+;; (CareerOneStop), not real per-student data, and would misrepresent net cost.
++;; Chart 2 — Cost step-down waterfall (What It Costs You)
++;; Solid descending running-total bars; final "net cost" bar in dark teal.
 +;; ============================================================================
 +
 +(defui financial-aid-waterfall
-+  [{:keys [data title legend-items source]}]
++  [{:keys [data title legend-items source y-max]}]
 +  ($ chart-frame
 +     {:title title :legend-items legend-items :source source}
 +     ($ :div {:class "w-full" :style {:height 360}}
@@ -244,8 +213,7 @@ index 0000000..5e65d12
 +                        :interval 0
 +                        :tick multiline-x-tick
 +                        :height 60})
-+              ($ YAxis {:domain #js [0 25000]
-+                        :ticks #js [0 5000 10000 15000 20000 25000]
++              ($ YAxis {:domain #js [0 (or y-max 25000)]
 +                        :tickFormatter usd
 +                        :tickLine false
 +                        :axisLine false
@@ -253,10 +221,10 @@ index 0000000..5e65d12
 +                        :stroke color-axis
 +                        :width 64})
 +              ($ Tooltip {:formatter (fn [v] (usd v))
-+                          :cursor #js {:fill "rgba(79,111,196,0.06)"}})
++                          :cursor #js {:fill "rgba(5,160,156,0.07)"}})
 +              ($ Bar {:dataKey "value" :radius #js [4 4 0 0] :isAnimationActive false}
 +                 (for [[i d] (map-indexed vector data)]
-+                   ($ Cell {:key i :fill (:fill d color-brand)}))
++                   ($ Cell {:key i :fill (:fill d color-earnings)}))
 +                 ($ LabelList {:dataKey "label"
 +                               :position "top"
 +                               :fill color-label
@@ -264,23 +232,27 @@ index 0000000..5e65d12
 +                               :fontWeight "bold"})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/core.cljs b/ui/advising-hub/src/components/rec_demo/core.cljs
 new file mode 100644
-index 0000000..f86a2a7
+index 0000000..af3a1a9
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/core.cljs
-@@ -0,0 +1,260 @@
+@@ -0,0 +1,476 @@
 +(ns components.rec-demo.core
-+  "PROTOTYPE — Rec UI redesign demo page (route: /rec-demo).
++  "PROTOTYPE — Rec UI redesign demo page, v2 (route: /rec-demo).
 +
-+   Demonstrates the proposed 3-level recommendation output for the dev team:
-+     L1  School card (collapsed)
-+     L2  Program list + school-level sections (Why This School Fits, Financial Aid)
-+     L3  Program sections as a one-at-a-time accordion
-+          (Overview · What's Cool About This Program [NEW] · Expected Outcomes
-+           · Career Summary · Career Paths)
++   v2 restructure (per BRYC_Rec_v2_Build_Plan.md):
++     • Two-column page: LEFT = Advisor Messages (note + login-driven advisor card);
++       RIGHT = 'Check these out:' (Safety/Target/Reach legend, Pathway
++       Recommendations, school tiles, Terms to Know).
++     • School tile → 'Learn More' → per-pathway sections as a one-at-a-time
++       accordion (Overview · What's Cool · Salary & Job Opportunities · Career
++       Paths) followed by the SCHOOL-anchored sections (About This School · What
++       It Costs You) rendered once per school.
++     • TEAL branding; 'Pathway' (not 'Program') throughout; no 'new' labels.
 +
-+   All content is hardcoded (components.rec-demo.data) from exemplar v7. No Notion
-+   calls, no live routes touched. Matches the app's UIx + shadcn/ui + Tailwind v4
-+   conventions and the student rec page's glassmorphism aesthetic."
++   All content is hardcoded (components.rec-demo.data). Every discipline-specific
++   field is conditional so the same components generalize to any bachelor's
++   pathway. Section display order and grad-rate norming both follow the plan
++   exactly (see data.cljs `section-order` and `grad-rate-norm`)."
 +  (:require [uix.core :as uix :refer [defui $ use-state]]
 +            [components.rec-demo.data :as data]
 +            [components.rec-demo.charts :as charts]
@@ -292,203 +264,431 @@ index 0000000..f86a2a7
 +;; Small shared primitives
 +;; ============================================================================
 +
++(defn onet-url [soc] (str "https://www.onetonline.org/link/summary/" soc))
++
++(defui ext-link
++  "Inline external link: hover tooltip (title), opens in a new tab (Build Plan §4)."
++  [{:keys [href label title class]}]
++  ($ :a {:href href :target "_blank" :rel "noopener noreferrer"
++         :title (or title href)
++         :class (str "text-[#007f81] font-semibold hover:underline underline-offset-2 "
++                     "decoration-[#40bfbb] " class)}
++     label))
++
 +(defui section-eyebrow
-+  "Uppercase label with the app's gradient dot, used for section headings."
 +  [{:keys [label]}]
 +  ($ :div {:class "flex items-center mb-4"}
-+     ($ :div {:class "w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full mr-3 opacity-70"})
-+     ($ :h3 {:class "text-sm font-semibold uppercase tracking-wide text-gray-600"} label)))
-+
-+(defui stat-card
-+  [{:keys [label value sub]}]
-+  ($ :div {:class "bg-white/70 rounded-xl shadow-sm p-4 flex flex-col"}
-+     ($ :div {:class "text-2xl font-bold text-slate-800 leading-tight"} value)
-+     ($ :div {:class "text-xs font-medium text-gray-600 mt-1"} label)
-+     (when sub
-+       ($ :div {:class "text-xs text-gray-400 mt-0.5"} sub))))
-+
-+(defui stat-grid
-+  [{:keys [stats]}]
-+  ($ :div {:class "grid grid-cols-2 md:grid-cols-3 gap-3"}
-+     (for [[i s] (map-indexed vector stats)]
-+       ($ stat-card (assoc s :key i)))))
++     ($ :div {:class "w-2 h-2 bg-[#05a09c] rounded-full mr-3"})
++     ($ :h3 {:class "text-sm font-semibold uppercase tracking-wide text-[#2a6465] font-head"} label)))
 +
 +(defui bullet-list
-+  [{:keys [bullets]}]
++  [{:keys [bullets dot]}]
 +  ($ :ul {:class "space-y-3"}
-+     (for [[i b] (map-indexed vector bullets)]
-+       ($ :li {:key i :class "flex text-sm md:text-base text-gray-600 leading-relaxed"}
-+          ($ :span {:class "mr-3 text-blue-400 shrink-0"} "•")
++     (for [[i b] (map-indexed vector (remove nil? bullets))]
++       ($ :li {:key i :class "flex text-sm md:text-base text-[#313335] leading-relaxed"}
++          ($ :span {:class "mr-3 text-[#05a09c] shrink-0"} (or dot "•"))
 +          ($ :span b)))))
 +
-+(defui callout-card
-+  "Highlighted differentiator card for the What's Cool section."
-+  [{:keys [tag title body link accent]}]
++(defui stars
++  [{:keys [n size color]}]
++  ($ :div {:class (str "flex items-center gap-0.5 " (or size "text-xl"))}
++     (for [i (range 5)]
++       ($ :span {:key i :class (if (< i n) (or color "text-[#05a09c]") "text-white/40")} "★"))))
++
++(defui str-badge
++  [{:keys [classification]}]
++  ($ :span {:class "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-white"
++            :style {:background-color (:color classification)}}
++     (:label classification)))
++
++(defui read-more
++  "Shows `head` items, then a Read More / Read Less toggle revealing `tail`."
++  [{:keys [head tail label-more label-less]}]
++  (let [[open? set-open!] (use-state false)]
++    ($ :div
++       head
++       (when open? tail)
++       (when tail
++         ($ :button {:class "mt-3 text-sm font-semibold text-[#007f81] hover:underline underline-offset-2"
++                     :on-click #(set-open! not)}
++            (if open? (or label-less "Read Less ▲") (or label-more "Read More ▼")))))))
++
++;; ============================================================================
++;; Section 1 — Overview (exactly 6 bullets; caveat conditional)
++;; ============================================================================
++
++(defui overview-section [{:keys [pathway]}]
++  (let [{:keys [credential-line student-connection caveat day-to-day]} (:overview pathway)
++        lic (:licensure-exam pathway)]
++    ($ :div {:class "space-y-4"}
++       ($ bullet-list
++          {:bullets (concat [credential-line student-connection caveat] day-to-day)})
++       (when lic
++         ($ :p {:class "text-sm text-[#313335] leading-relaxed bg-[#d0ecef]/50 rounded-lg p-3"}
++            "The degree alone doesn't license you — you also pass the "
++            ($ ext-link {:href (:url lic) :label (:name lic)
++                         :title (str (:name lic) " — " (:note lic))})
++            ", " (:note lic) ".")))))
++
++;; ============================================================================
++;; Section 2 — What's Cool About This Pathway (≤4 qualitative callouts)
++;; ============================================================================
++
++(defui callout-card [{:keys [tag title body accent]}]
 +  ($ :div {:class (str "border-l-4 rounded-r-xl shadow-sm p-4 " accent)}
-+     ($ :div {:class "text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1"} tag)
-+     ($ :div {:class "text-sm md:text-base font-semibold text-slate-800 mb-1"} title)
-+     ($ :p {:class "text-sm text-gray-600 leading-relaxed"} body)
-+     (when link
-+       ($ :a {:href (:href link)
-+              :class "inline-block mt-2 text-sm font-semibold text-primary hover:underline underline-offset-2"}
-+          (:label link)))))
++     ($ :div {:class "text-[11px] font-semibold uppercase tracking-wide text-[#676868] mb-1"} tag)
++     ($ :div {:class "text-sm md:text-base font-semibold text-[#2a6465] mb-1 font-head"} title)
++     ($ :p {:class "text-sm text-[#313335] leading-relaxed"} body)))
++
++(defui whats-cool-section [{:keys [pathway]}]
++  ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-3"}
++     (for [[i c] (map-indexed vector (take 4 (:whats-cool pathway)))]
++       ($ callout-card (assoc c :key i)))))
 +
 +;; ============================================================================
-+;; Level 3 — Program section accordion
++;; Section 3 — Salary & Job Opportunities (chart + banded sentence + 3 tiles)
 +;; ============================================================================
 +
-+(defui section-item
-+  "One collapsible program section. The shadcn accordion (type=single) gives the
-+   one-at-a-time behavior Tavidee chose."
-+  [{:keys [value heading badge-text children]}]
++(defui salary-tile [{:keys [kind value label detail]}]
++  (let [hot? (= kind :stars)]
++    ($ :div {:class (str "rounded-xl shadow-sm p-4 flex flex-col gap-1.5 "
++                         (if hot? "bg-[#05a09c] ring-1 ring-[#05a09c]"
++                                  "bg-[#f3fafb] ring-1 ring-[#cdeaee]"))}
++       (if hot?
++         ($ stars {:n value :size "text-3xl" :color "text-white"})
++         ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} value))
++       ($ :div {:class (str "text-xs font-semibold uppercase tracking-wide "
++                            (if hot? "text-white" "text-[#676868]"))} label)
++       ($ :div {:class (str "text-xs leading-relaxed " (if hot? "text-white/90" "text-[#313335]"))} detail))))
++
++(defui salary-section [{:keys [pathway]}]
++  (let [s (:salary pathway)
++        band (:living-wage-band s)
++        band-color (case band "Above" "#2f9e44" "Below" "#c92a4a" "#e8a93b")]
++    ($ :div {:class "space-y-5"}
++       ($ charts/salary-vs-col-chart
++          {:title "Median Earnings vs. Cost of Living"
++           :legend-items (:chart-legend s)
++           :y-max 100000
++           :data (:chart-data s)})
++       ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
++          "Based on first-year earnings, graduates of this pathway tend to earn "
++          ($ :span {:class "font-bold" :style {:color band-color}} band)
++          " a living wage in Baton Rouge.")
++       ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
++          (for [[i t] (map-indexed vector (:tiles s))]
++            ($ salary-tile (assoc t :key i)))))))
++
++;; ============================================================================
++;; Section 4 — Career Paths (O*NET-linked + advanced-cred flags + PUMS)
++;; ============================================================================
++
++(defui career-row [{:keys [title soc requirement desc]}]
++  ($ :div {:class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4"}
++     ($ :div {:class "flex flex-wrap items-center gap-2 mb-1"}
++        ($ ext-link {:href (onet-url soc) :label title
++                     :title (str "O*NET career profile — " title)
++                     :class "text-base font-head"})
++        (when requirement
++          ($ :span {:class "inline-block rounded-full border border-[#e8a93b] bg-[#fff7e6] text-[#9a6a00] text-[10px] font-semibold px-2 py-0.5"}
++             requirement)))
++     ($ :p {:class "text-sm text-[#313335] leading-relaxed"} desc)))
++
++(defui pums-subsection [{:keys [pums]}]
++  ($ :div {:class "bg-[#f2f3f4] rounded-xl p-4 space-y-3"}
++     ($ :div
++        ($ :div {:class "text-sm font-semibold text-[#2a6465] font-head"}
++           "What degree-holders actually do")
++        ($ :p {:class "text-xs text-[#676868]"}
++           (str "Where " (:scope pums) " nursing-degree holders actually work "
++                "(field-of-degree data, not just this school).")))
++     (when (:under-50-callout? pums)
++       ($ :div {:class "rounded-lg bg-[#fff7e6] border border-[#e8a93b] p-3 text-sm text-[#9a6a00]"}
++          "Heads up: fewer than half of graduates in this field work in a directly-related job — worth talking through what that means for your plan."))
++     ($ :div {:class "space-y-2"}
++        (for [[i o] (map-indexed vector (:occupations pums))]
++          ($ :div {:key i :class "flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2 ring-1 ring-[#cdeaee]"}
++             ($ :div {:class "min-w-0"}
++                (if (:onet o)
++                  ($ ext-link {:href (onet-url (:onet o)) :label (:title o)
++                               :title (str "O*NET — " (:title o)) :class "text-sm"})
++                  ($ :span {:class "font-semibold text-sm text-[#313335]"} (:title o)))
++                (when (:note o)
++                  ($ :div {:class "text-[11px] text-[#676868]"} (:note o))))
++             ($ :div {:class "text-right shrink-0"}
++                ($ :div {:class "text-sm font-bold text-[#2a6465] font-head"} (:pct o))
++                ($ :div {:class "text-[11px] text-[#676868]"}
++                   (str "~$" (.toLocaleString (:median o) "en-US") "/yr"))))))))
++
++(defui careers-section [{:keys [pathway]}]
++  (let [roles (:roles (:careers pathway))
++        pums (:pums (:careers pathway))
++        base (vec roles)
++        head-roles (subvec base 0 (min 3 (count base)))
++        tail-roles (when (> (count base) 3) (subvec base 3))]
++    ($ :div {:class "space-y-4"}
++       ($ read-more
++          {:head ($ :div {:class "space-y-3"}
++                    (for [[i r] (map-indexed vector head-roles)] ($ career-row (assoc r :key i))))
++           :tail (when tail-roles
++                   ($ :div {:class "space-y-3 mt-3"}
++                      (for [[i r] (map-indexed vector tail-roles)] ($ career-row (assoc r :key (+ 100 i))))))
++           :label-more "Show advanced-practice paths ▼"
++           :label-less "Show fewer ▲"})
++       ;; PUMS — bachelor's only (Build Plan §4 / spec)
++       (when (and (:bachelors? pathway) pums)
++         ($ pums-subsection {:pums pums})))))
++
++;; ============================================================================
++;; Section 5 — About This School (school-anchored; 3-figure callout)
++;; ============================================================================
++
++(defui callout-figure
++  "indicator = optional {:label :color} pill (e.g. grad-rate norm High/Medium/Low)."
++  [{:keys [value label sub indicator]}]
++  ($ :div {:class "bg-white rounded-xl shadow-sm ring-1 ring-[#bcdfe5] p-4 text-center"}
++     ($ :div {:class "text-2xl md:text-3xl font-bold text-[#2a6465] font-head"} value)
++     ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"} label)
++     (when indicator
++       ($ :div {:class "mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold"
++                :style {:background-color (str (:color indicator) "1f")
++                        :color (:color indicator)}}
++          (:label indicator)))
++     (when sub ($ :div {:class "text-xs text-[#676868] mt-1 leading-snug"} sub))))
++
++(defui about-school-section [{:keys [school student]}]
++  (let [cls (data/classify-str (:act student) (:act-25 school) (:act-75 school))
++        gnorm data/grad-rate-norm
++        gcolor (case (:indicator gnorm) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
++        total (.toLocaleString (:enrollment-total school) "en-US")
++        enroll-fig (if (:minority? student)
++                     {:value (:enrollment-group-pct school)
++                      :label (str (:enrollment-group-label school) " enrollment")
++                      :sub (str (.toLocaleString (:enrollment-group-count school) "en-US")
++                                " of " total " students")}
++                     {:value total :label "Total enrollment"})]
++    ($ :div {:class "space-y-4"}
++       ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
++          ($ callout-figure {:value (:acceptance school) :label "Acceptance Rate"})
++          ($ callout-figure {:value (:grad-rate-4yr school) :label "4-Year Graduation Rate"
++                             :indicator {:label (:indicator gnorm) :color gcolor}
++                             :sub (str (:delta gnorm) " pts vs. similar-size LA publics (avg " (:band-average gnorm) "%)")})
++          ($ callout-figure enroll-fig))
++       ($ bullet-list
++          {:bullets
++           [($ :span nil
++               (str "Located " (:distance school) " — " (:setting school) ". See ")
++               ($ ext-link {:href (:campus-life-url school) :label "campus life"
++                            :title "Southeastern — campus life"})
++               ".")
++            (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
++                 (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
++                 " here — admission is very likely and a good academic match.")]}))))
++
++;; ============================================================================
++;; Section 6 — What It Costs You (school-anchored; recomputed waterfall)
++;; ============================================================================
++
++(defui costs-section [{:keys [school]}]
++  (let [c (:costs school)
++        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
++    ($ :div {:class "space-y-4"}
++       ($ charts/financial-aid-waterfall
++          {:title "Your Estimated Annual Cost — After Financial Aid"
++           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + Room & board " (usd (:room-board-on c)) " + Books " (usd (:books c)))}
++                          {:color charts/color-net :label "Your estimated net cost after TOPS + Pell"}]
++           :y-max 22000
++           :data [{:name "Total Cost\nof Attendance" :value (:coa c) :label (usd (:coa c)) :fill charts/color-earnings}
++                  {:name (str "After\n" (:tops-name c)) :value (- (:coa c) (:tops c)) :label (usd (- (:coa c) (:tops c))) :fill charts/color-earnings}
++                  {:name "Your Net Cost\n(after Pell)" :value (:net c) :label (usd (:net c)) :fill charts/color-net}]})
++       ($ bullet-list
++          {:bullets
++           [(str "The full cost to attend for one year is about " (usd (:coa c))
++                 " — tuition, fees, housing, and books.")
++            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that.")
++            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year.")
++            (str "Average student debt at graduation is about " (usd (:avg-debt c)) ".")]})
++       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
++          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
++             ($ :span {:class "font-bold"} "This is an estimate only. ")
++             "You must complete the "
++             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
++                          :title "studentaid.gov — complete the FAFSA"})
++             " and receive your award letter to know your true cost."))
++       ($ ext-link {:href (:npc-url c) :label "See Southeastern's cost & financial aid info →"
++                    :title "Southeastern — Cost & Financial Aid"}))))
++
++;; ============================================================================
++;; Per-pathway accordion (one-at-a-time) + school-anchored sections
++;; ============================================================================
++
++(defui section-item [{:keys [value heading children tint?]}]
++  ;; tint? = soft teal wash for SCHOOL-anchored sections, to set them apart from
++  ;; the white program/pathway sections.
 +  ($ accordion/AccordionItem
 +     {:value value
-+      :class "bg-white/60 backdrop-blur-sm rounded-xl shadow-sm border-0 px-4"}
++      :class (str "rounded-xl shadow-sm ring-1 border-0 px-4 "
++                  (if tint? "bg-[#dceef1] ring-[#a9d8de]" "bg-white ring-[#bcdfe5]"))}
 +     ($ accordion/AccordionTrigger {:class "hover:no-underline py-4"}
-+        ($ :div {:class "flex items-center gap-2 text-left"}
-+           ($ :span {:class "text-base font-semibold text-slate-700"} heading)
-+           (when badge-text
-+             ($ badge/Badge {:variant "secondary"
-+                             :class "text-[10px] bg-violet-100 text-violet-700"}
-+                badge-text))))
-+     ($ accordion/AccordionContent {:class "pb-5 pt-1"}
-+        children)))
++        ($ :span {:class "text-base font-semibold text-[#2a6465] text-left font-head"} heading))
++     ;; px-1.5 so inner box rings/shadows clear AccordionContent's overflow-hidden
++     ;; (shadcn applies overflow-hidden for the open/close animation).
++     ($ accordion/AccordionContent {:class "pb-5 pt-1 px-1.5"} children)))
 +
-+(defui whats-cool-section []
-+  ($ :div {:class "space-y-5"}
-+     ($ charts/salary-vs-col-chart
-+        {:title "Median Salary Compared to Cost of Living"
-+         :legend-items data/salary-legend
-+         :source data/salary-source
-+         :data data/salary-data})
-+     ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-3"}
-+        (for [[i c] (map-indexed vector data/whats-cool-callouts)]
-+          ($ callout-card (assoc c :key i))))))
++(def pathway-section-meta
++  {:overview   {:heading "Overview"                      :render overview-section}
++   :whats-cool {:heading "What's Cool About This Pathway" :render whats-cool-section}
++   :salary     {:heading "Salary & Job Opportunities"    :render salary-section}
++   :careers    {:heading "Career Paths"                  :render careers-section}})
 +
-+(defui expected-outcomes-section []
-+  ($ :div {:class "space-y-4"}
-+     ($ :div {:class "flex items-center gap-2"}
-+        ($ badge/Badge {:class "bg-amber-100 text-amber-800 border-0"} "★ 5-Star LWC Occupation")
-+        ($ :span {:class "text-sm text-gray-600"}
-+           "High demand — significantly more employers than qualified candidates in Louisiana."))
-+     ($ stat-grid {:stats data/expected-outcomes-stats})
-+     ($ :p {:class "text-xs italic text-slate-500"} data/expected-outcomes-source)))
-+
-+(defui career-paths-section []
-+  ($ :div {:class "space-y-3"}
-+     (for [[i {:keys [title requirement desc]}] (map-indexed vector data/career-paths)]
-+       ($ :div {:key i :class "bg-white/70 rounded-xl shadow-sm p-4"}
-+          ($ :div {:class "flex flex-wrap items-center gap-2 mb-1"}
-+             ($ :span {:class "font-semibold text-slate-800"} title)
-+             (when requirement
-+               ($ badge/Badge {:variant "outline" :class "text-[10px] text-gray-500"}
-+                  requirement)))
-+          ($ :p {:class "text-sm text-gray-600 leading-relaxed"} desc)))))
-+
-+(defui program-sections
-+  "Level 3: all program sections as a one-at-a-time accordion (Overview open)."
-+  []
++(defui pathway-sections
++  "The pathway-specific sections (1–4) as a one-at-a-time accordion, Build Plan §3 order."
++  [{:keys [pathway]}]
 +  ($ accordion/Accordion {:type "single" :collapsible true :default-value "overview"
 +                          :class "space-y-3"}
-+     ($ section-item {:value "overview" :heading "Overview"}
-+        ($ bullet-list {:bullets data/overview-bullets}))
-+     ($ section-item {:value "whats-cool" :heading "What's Cool About This Program"
-+                      :badge-text "NEW"}
-+        ($ whats-cool-section))
-+     ($ section-item {:value "outcomes" :heading "Expected Outcomes"}
-+        ($ expected-outcomes-section))
-+     ($ section-item {:value "career-summary" :heading "Career Summary"}
-+        ($ bullet-list {:bullets data/career-summary-bullets}))
-+     ($ section-item {:value "career-paths" :heading "Career Paths"}
-+        ($ career-paths-section))))
++     (for [k data/section-order
++           :let [{:keys [heading render]} (pathway-section-meta k)]]
++       ($ section-item {:key (name k) :value (name k) :heading heading}
++          ($ render {:pathway pathway})))))
++
++(defui pathway-row
++  "A recommended pathway that unfurls its own details when clicked (v1 model).
++   Multiple pathways can sit under one school; each unfurls independently, while
++   About This School + What It Costs You are anchored once to the school below."
++  [{:keys [pathway default-open?]}]
++  (let [[open? set-open!] (use-state (boolean default-open?))]
++    ($ :div {:class "bg-white rounded-xl shadow-sm ring-1 ring-[#bcdfe5] overflow-hidden"}
++       ($ :button {:class "w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-[#f3fafb] transition-colors"
++                   :on-click #(set-open! not)}
++          ($ :div {:class "min-w-0"}
++             ($ :div {:class "font-semibold text-[#2a6465] font-head"}
++                (str (:name pathway) " (" (:acronym pathway) ")"))
++             ($ :div {:class "text-sm text-[#676868] mt-0.5"} (:track pathway)))
++          ($ :span {:class "shrink-0 text-sm font-semibold text-[#007f81]"}
++             (if open? "Hide ▲" "View pathway ▼")))
++       (when open?
++         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4]"}
++            ($ pathway-sections {:pathway pathway}))))))
++
++(defui school-sections
++  "School-anchored sections — rendered ONCE per school, shared across all pathways."
++  [{:keys [school student]}]
++  ;; Default-open + anchored under the pathways (collapsible, but shown unfurled).
++  ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
++                          :class "space-y-3"}
++     ($ section-item {:value "about-school" :heading "About This School" :tint? true}
++        ($ about-school-section {:school school :student student}))
++     ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
++        ($ costs-section {:school school}))))
++
++(defui school-expanded
++  "What unfurls under a school tile: the recommended pathways (each unfurls its own
++   1–4 sections) followed by the school-anchored About This School + What It Costs You."
++  [{:keys [school student]}]
++  ($ :div {:class "space-y-5"}
++     ($ :div {:class "space-y-3"}
++        ($ section-eyebrow {:label (str (count data/pathways) " Recommended Pathway"
++                                        (when (> (count data/pathways) 1) "s"))})
++        ;; Pathways start COLLAPSED — the student clicks one to unfurl its details.
++        (for [p data/pathways]
++          ($ pathway-row {:key (:id p) :pathway p :default-open? false})))
++     ($ school-sections {:school school :student student})))
 +
 +;; ============================================================================
-+;; Level 2 — School view (program rows + static school-level sections)
++;; School tile (Pathway Recommendations) — Learn More expander
 +;; ============================================================================
 +
-+(defui program-row
-+  [{:keys [program open? on-toggle]}]
-+  ($ :div {:class "bg-white/60 backdrop-blur-sm rounded-xl shadow-sm overflow-hidden"}
-+     ($ :button {:class "w-full flex items-center justify-between gap-4 p-4 text-left hover:bg-white/40 transition-colors"
-+                 :on-click on-toggle}
++(defui school-tile [{:keys [school student]}]
++  (let [[open? set-open!] (use-state false)
++        cls (data/classify-str (:act student) (:act-25 school) (:act-75 school))]
++    ($ card/Card {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#d0ecef] border-0 overflow-hidden"}
++       ($ :div {:class "p-5 space-y-3"}
++          ;; Logo + Safety/Target/Reach badge — vertically centered together.
++          ($ :div {:class "flex items-center justify-between gap-4"}
++             (if (:logo school)
++               ($ :img {:src (:logo school) :alt (:name school)
++                        :class "h-9 md:h-10 w-auto object-contain"})
++               ($ :h3 {:class "text-lg font-semibold text-[#2a6465] font-head"} (:name school)))
++             ($ str-badge {:classification cls}))
++          ($ :div {:class "flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#676868]"}
++             ($ :span (str (:city school) ", " (:state school)))
++             ($ :span "·") ($ :span (:type school))
++             ($ :span "·")
++             ($ ext-link {:href (:website school) :label (:website-label school)
++                          :title (:website school) :class "text-sm"}))
++          ;; -ml-2.5 cancels the first pill's left padding so the tag TEXT lines up
++          ;; with the city name above it.
++          ($ :div {:class "flex flex-wrap gap-2 -ml-2.5"}
++             (for [t (:tags (first data/pathways))]
++               ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t)))
++          ($ :button {:class "mt-1 w-full rounded-xl bg-[#05a09c] hover:bg-[#007f81] text-white font-semibold py-2.5 transition-colors"
++                      :on-click #(set-open! not)}
++             (if open? "Show Less ▲" "Learn More ▼")))
++       (when open?
++         ($ :div {:class "px-3 md:px-5 pb-5 pt-1 bg-[#f2f3f4]"}
++            ($ :div {:class "pt-4"}
++               ($ school-expanded {:school school :student student})))))))
++
++;; ============================================================================
++;; Left column — Advisor Messages
++;; ============================================================================
++
++(defui advisor-card [{:keys [advisor]}]
++  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#d0ecef] p-5"}
++     ($ :div {:class "flex items-center gap-4"}
++        ($ :img {:src (:headshot advisor)
++                 :alt (:name advisor)
++                 :class "w-16 h-16 rounded-full object-cover ring-2 ring-[#d0ecef]"})
 +        ($ :div
-+           ($ :div {:class "font-semibold text-slate-800"} (:title program))
-+           ($ :div {:class "text-sm text-gray-500 mt-0.5"}
-+              (str (:track program) " · " (:credential program))))
-+        ($ :div {:class "flex items-center gap-3 shrink-0"}
-+           ($ badge/Badge {:variant "outline" :class "text-xs"} (:category program))
-+           ($ :span {:class "text-gray-400 text-sm"} (if open? "▲ Hide" "▼ View"))))
-+     (when open?
-+       ($ :div {:class "px-3 pb-4 pt-1 md:px-4"}
-+          ($ program-sections)))))
++           ($ :div {:class "font-semibold text-[#2a6465] font-head"} (:name advisor))
++           ($ :div {:class "text-sm text-[#676868]"} (:title advisor))))
++     ($ :div {:class "mt-4 space-y-1.5 text-sm"}
++        ($ :div "Email me: "
++           ($ ext-link {:href (str "mailto:" (:email advisor)) :label (:email advisor)
++                        :title (str "Email " (:name advisor))}))
++        ($ :div
++           ($ ext-link {:href (:appointment-url advisor) :label "Schedule an appointment →"
++                        :title "Book time on my Google Calendar"})))))
 +
-+(defui why-this-school-fits []
++(defui advisor-messages [{:keys [advisor]}]
 +  ($ :div {:class "space-y-4"}
-+     ($ section-eyebrow {:label "Why This School Fits"})
-+     ($ stat-grid {:stats data/why-fits-stats})
-+     ($ :div {:class "bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm p-5"}
-+        ($ bullet-list {:bullets data/why-fits-bullets}))))
-+
-+(defui financial-aid-section []
-+  ($ :div {:class "space-y-4"}
-+     ($ section-eyebrow {:label "Financial Aid"})
-+     ($ charts/financial-aid-waterfall
-+        {:title "Estimated Annual Cost at SLU — After Your Financial Aid"
-+         :legend-items data/waterfall-legend
-+         :source data/waterfall-source
-+         :data data/waterfall-data})
-+     ($ :div {:class "bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm p-5 space-y-4"}
-+        ($ bullet-list {:bullets data/financial-aid-bullets})
-+        ($ :a {:href data/net-price-calculator-url
-+               :target "_blank" :rel "noopener noreferrer"
-+               :class "inline-block text-sm font-semibold text-primary hover:underline underline-offset-2"}
-+           "Personalized estimate — SLU Net Price Calculator →"))))
-+
-+(defui school-view []
-+  (let [programs (:programs data/school)
-+        [open-id set-open!] (use-state (:id (first programs)))]
-+    ($ card/CardContent {:class "space-y-8 pt-0 px-6 pb-6"}
-+       ;; --- Programs (each opens Level 3) ---
-+       ($ :div {:class "space-y-4"}
-+          ($ section-eyebrow {:label (str (count programs) " Recommended Program"
-+                                          (when (> (count programs) 1) "s"))})
-+          (for [p programs]
-+            ($ program-row {:key (:id p)
-+                            :program p
-+                            :open? (= open-id (:id p))
-+                            :on-toggle #(set-open! (fn [cur] (when-not (= cur (:id p)) (:id p))))})))
-+       ($ :div {:class "h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"})
-+       ;; --- Static school-level sections ---
-+       ($ why-this-school-fits)
-+       ($ financial-aid-section))))
++     ($ section-eyebrow {:label (:messages-label advisor)})
++     ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#d0ecef] p-5 border-l-4 border-l-[#05a09c]"}
++        ($ :p {:class "text-sm md:text-base text-[#313335] leading-relaxed"} (:note advisor)))
++     ($ advisor-card {:advisor advisor})))
 +
 +;; ============================================================================
-+;; Level 1 — School card
++;; Right column — "Check these out:"
 +;; ============================================================================
 +
-+(defui school-card []
-+  (let [[expanded? set-expanded!] (use-state false)
-+        s data/school]
-+    ($ card/Card
-+       {:class "relative transition-all duration-300 ease-in-out bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm border-0"}
-+       ($ card/CardHeader {:class "p-6 cursor-pointer"
-+                           :on-click #(set-expanded! not)}
-+          ($ :div {:class "flex items-start justify-between gap-6"}
-+             ($ :div {:class "flex-1"}
-+                ($ card/CardTitle {:class "text-lg md:text-xl font-semibold text-gray-700 mb-2"}
-+                   (:name s))
-+                ($ :div {:class "flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"}
-+                   ($ :span (:type s))
-+                   ($ :span "·") ($ :span (:location s))
-+                   ($ :span "·") ($ :span (:distance s))
-+                   ($ :span "·") ($ :span (str "Acceptance rate: " (:acceptance s))))
-+                ($ :div {:class "flex flex-wrap gap-2 mt-3"}
-+                   (for [c (:credentials s)]
-+                     ($ badge/Badge {:key c :variant "secondary" :class "text-xs"} c))))
-+             ($ :span {:class "text-sm font-medium text-gray-500 shrink-0 mt-1"}
-+                (if expanded? "Collapse" "Expand"))))
-+       (when expanded?
-+         ($ school-view)))))
++(defui str-legend []
++  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#d0ecef] p-4"}
++     ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-2"}
++        "Safety · Target · Reach")
++     ($ :div {:class "space-y-1.5"}
++        (for [{:keys [key label def color]} data/str-legend]
++          ($ :div {:key key :class "flex items-start gap-2 text-sm"}
++             ($ :span {:class "mt-1.5 w-2.5 h-2.5 rounded-full shrink-0" :style {:background-color color}})
++             ($ :span ($ :span {:class "font-semibold text-[#313335]"} (str label ": ")) def))))))
++
++(defui terms-to-know []
++  ($ :div {:class "bg-[#d0ecef]/40 rounded-2xl p-4"}
++     ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#2a6465] mb-2 font-head"}
++        "Terms to Know")
++     ($ :dl {:class "space-y-2"}
++        (for [{:keys [term def]} data/terms-to-know]
++          ($ :div {:key term :class "text-sm"}
++             ($ :dt {:class "font-semibold text-[#313335] inline"} (str term ": "))
++             ($ :dd {:class "inline text-[#676868]"} def))))))
++
++(defui recommendations-column [{:keys [school student]}]
++  ($ :div {:class "space-y-4"}
++     ($ :h2 {:class "text-xl font-semibold text-[#2a6465] font-head"} "Check these out:")
++     ($ str-legend)
++     ($ :div {:class "space-y-3"}
++        ($ section-eyebrow {:label "Pathway Recommendations"})
++        ($ school-tile {:school school :student student}))
++     ($ terms-to-know)))
 +
 +;; ============================================================================
 +;; Page
@@ -496,232 +696,341 @@ index 0000000..f86a2a7
 +
 +(defui rec-demo-page [_props]
 +  (let [s data/student]
-+    ($ :div {:class "min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50"}
-+       ;; Header
-+       ($ :div {:class "bg-white/40 backdrop-blur-sm shadow-sm px-6 md:px-8 py-5"}
-+          ($ :div {:class "max-w-4xl mx-auto flex items-center justify-between gap-4"}
-+             ($ :h1 {:class "text-xl md:text-2xl font-semibold text-gray-700"}
-+                "Your Personalized Recommendations")
-+             ($ badge/Badge {:variant "outline"
-+                             :class "text-[11px] text-amber-700 border-amber-300 bg-amber-50"}
-+                "PROTOTYPE")))
++    ($ :div {:class "min-h-screen bg-[#f2f3f4]"}
++       ;; Header bar — dark teal, BRYC white-circle logo + first-name title
++       ($ :div {:class "bg-[#2a6465] shadow-sm px-6 md:px-8 py-4"}
++          ($ :div {:class "max-w-6xl mx-auto flex items-center gap-3"}
++             ($ :img {:src "assets/bryc-logo-white.png" :alt "BRYC"
++                      :class "w-10 h-10 rounded-full"})
++             ($ :h1 {:class "text-lg md:text-2xl font-bold text-white font-head"}
++                (str (:first-name s) "'s Personalized Recommendations"))))
 +
-+       ($ :div {:class "max-w-4xl mx-auto px-6 md:px-8 py-8 space-y-6"}
-+          ;; Student context
-+          ($ :div {:class "bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm p-5"}
-+             ($ :div {:class "flex flex-wrap items-baseline gap-x-3 gap-y-1"}
-+                ($ :span {:class "text-lg font-semibold text-slate-800"} (:name s))
-+                (when (:placeholder? s)
-+                  ($ :span {:class "text-xs text-gray-400"} "(placeholder)")))
-+             ($ :div {:class "flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mt-2"}
-+                ($ :span "ACT: " ($ :span {:class "font-medium text-slate-700"} (:act s)))
-+                ($ :span "GPA: " ($ :span {:class "font-medium text-slate-700"} (:gpa s)))
-+                ($ :span "TOPS: " ($ :span {:class "font-medium text-slate-700"} (:tops s)))
-+                ($ :span "Interests: " ($ :span {:class "font-medium text-slate-700"} (:interests s)))))
-+
-+          ;; Advisor note (per-student, shown first)
-+          ($ :div
-+             ($ section-eyebrow {:label "From Your Advisor"})
-+             ($ :div {:class "bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm p-6 border-l-4 border-l-blue-400"}
-+                ($ :p {:class "text-sm md:text-base text-gray-700 leading-relaxed"}
-+                   data/advisor-note)))
-+
-+          ;; School card (Level 1 → 2 → 3)
-+          ($ school-card)))))
++       ;; Two-column body
++       ($ :div {:class "max-w-6xl mx-auto px-4 md:px-8 py-8"}
++          ($ :div {:class "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"}
++             ($ :div {:class "lg:col-span-4 lg:sticky lg:top-6"}
++                ($ advisor-messages {:advisor data/advisor}))
++             ($ :div {:class "lg:col-span-8"}
++                ($ recommendations-column {:school data/school :student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..0c0f3ed
+index 0000000..a75f6ad
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,313 @@
 +(ns components.rec-demo.data
-+  "Hardcoded demo content for the rec-redesign PROTOTYPE.
++  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
-+   Source of truth: bryc_exemplar_v7.docx (SLU BSN). Do NOT invent, summarize, or
-+   paraphrase — every value below is copied from the exemplar / redesign plan.
-+   The production app sources this from Notion (Credential Foundation, School
-+   Addendum, School Profile); the prototype does not call Notion."
++   Source of truth: bryc_exemplar (SLU BSN) + the v2 Build Plan & Obney Spec.
++   Field names mirror the Obney spec so production wiring is a direct map. The
++   production app sources these from Notion / BOR / IPEDS / PSEO / LWC / IPUMS;
++   the prototype hardcodes verified exemplar values.
++
++   Transferability (Build Plan §5/§6): every discipline-specific field is OPTIONAL
++   and omitted when nil (caveat, licensure-exam, PUMS for non-bachelor's, etc.),
++   so the same components render any bachelor's pathway by swapping this data.
++
++   Both previously-flagged items now follow the plan exactly:
++     • SECTION DISPLAY ORDER — Build Plan §3 order, in `section-order`.
++     • 4-YR GRAD-RATE NORMING — spec bands/thresholds, computed in `grad-rate-norm`."
 +  (:require [components.rec-demo.charts :as charts]))
 +
 +;; ----------------------------------------------------------------------------
-+;; Student context + advisor note (per-student, shown first)
++;; Student profile / intake
 +;; ----------------------------------------------------------------------------
 +
 +(def student
 +  {:name "Arianna Johnson"
++   :first-name "Arianna"
 +   :placeholder? true
-+   :act "20"
++   :act 20
 +   :gpa "3.1"
 +   :tops "Opportunity"
-+   :interests "Healthcare, wanting to help people"})
-+
-+(def advisor-note
-+  (str "Based on your interest in healthcare and wanting to make a direct impact "
-+       "on people's lives, these programs are strong fits for your profile. Each "
-+       "one leads to real career outcomes with strong financial returns in "
-+       "Louisiana. Review each program, then let's talk through your questions at "
-+       "our next meeting."))
++   :interests "Healthcare, wanting to help people"
++   ;; Race-aware enrollment branch (Build Plan §3.5). Arianna is in a minority
++   ;; racial group at SLU, so she sees own-group-vs-total. TODO(verify): student
++   ;; race is inferred from the v7 exemplar framing, not an explicit intake field.
++   :race-group "Black/African American"
++   :minority? true})
 +
 +;; ----------------------------------------------------------------------------
-+;; Chart data
++;; Advisor card — login-driven (Build Plan §2). Prototype = the logged-in creator.
++;; Heading label follows the creator's role: advisor → "Advisor Messages".
 +;; ----------------------------------------------------------------------------
 +
-+(def salary-data
-+  [{:name "1 Year Out"                          :value 70105 :label "$70,105" :fill charts/color-brand}
-+   {:name "5 Years Out"                         :value 73162 :label "$73,162" :fill charts/color-brand}
-+   {:name "10 Years Out"                        :value 85313 :label "$85,313" :fill charts/color-brand}
-+   {:name "Cost to Live in\nBaton Rouge\n(Single Adult)" :value 45496 :label "$45,496" :fill charts/color-brand}
-+   {:name "Cost to Live in\nLouisiana\n(Single Adult)"   :value 42370 :label "$42,370" :fill charts/color-brand}])
-+
-+(def salary-source
-+  (str "Sources: PSEO 2025Q4, U.S. Census Bureau (CIP 51.38, Registered Nursing, "
-+       "Baccalaureate, All Cohorts, 2,887 graduates) — lehd.ces.census.gov/data/pseo  |  "
-+       "MIT Living Wage Calculator, Feb 2026 — Baton Rouge $45,496/yr; Louisiana $42,370/yr "
-+       "(livingwage.mit.edu)"))
-+
-+(def salary-legend
-+  [{:color charts/color-brand
-+    :label "Southeastern BSN graduate earnings (PSEO 2025Q4 — CIP 51.38, All Cohorts)"}])
-+
-+;; Step-down waterfall as solid descending running-total bars (matches reference
-+;; PNG). NOTE: the "After Scholarships" step from the PNG is intentionally OMITTED
-+;; per the plan — it is illustrative (CareerOneStop), not real per-student data.
-+;;   Total CoA 19,913 → After TOPS 14,261 → After Pell 6,866 → Net 5,366
-+(def waterfall-data
-+  [{:name "Total Cost\nof Attendance" :value 19913 :label "$19,913" :fill charts/color-brand}
-+   {:name "After TOPS\nOpportunity"   :value 14261 :label "$14,261" :fill charts/color-brand}
-+   {:name "After\nPell Grant"         :value 6866  :label "$6,866"  :fill charts/color-brand}
-+   {:name "Your Estimated\nNet Cost"  :value 5366  :label "$5,366"  :fill charts/color-net}])
-+
-+(def waterfall-legend
-+  [{:color charts/color-brand
-+    :label "Tuition & Fees $8,373 + Room & Board $10,240 + Books $1,300"}
-+   {:color charts/color-net
-+    :label "Your estimated net cost after all aid"}])
-+
-+(def waterfall-source
-+  "IPEDS 2024-25 · LOSFA/SLU 2025-26 · Pell estimate (max annual)")
++(def advisor
++  {:messages-label "Advisor Messages"          ;; "Counselor Messages" when a Senior Counselor builds it
++   :name "Tavidee Hoskins"
++   ;; TODO(verify): exact title string from the BRYC Team sheet (col Title).
++   :title "BRYC Senior Advisor"
++   :email "tavidee@thebryc.org"
++   :appointment-url "https://calendar.app.google/QMgRhuFJTedbwBub6"
++   :headshot "assets/advisor-tavidee.png"      ;; Team Headshots_BRYC App → "Tavidee Hoskins"
++   :note (str "Based on your interest in healthcare and wanting to make a direct "
++              "impact on people's lives, this pathway is a strong fit for your "
++              "profile. It leads to real career outcomes with strong financial "
++              "returns in Louisiana. Review each section below, then let's talk "
++              "through your questions at our next meeting.")})
 +
 +;; ----------------------------------------------------------------------------
-+;; Expected Outcomes — stat grid (LWC, SOC 29-1141 Registered Nurses)
++;; "Terms to Know" + Safety/Target/Reach legend (Build Plan §2)
 +;; ----------------------------------------------------------------------------
 +
-+(def expected-outcomes-stats
-+  [{:label "Louisiana Median Wage"        :value "$76,636"  :sub "per year"}
-+   {:label "Starting Range (lowest 10%)"  :value "$60,722"  :sub "per year"}
-+   {:label "Top Earners (highest 10%)"    :value "$101,650" :sub "per year"}
-+   {:label "RNs Employed in Louisiana"    :value "43,736"   :sub "current"}
-+   {:label "Projected RNs by 2032"        :value "47,036"   :sub "+3,300 new jobs"}
-+   {:label "10-Year Growth Rate"          :value "7.55%"    :sub "27,706 total openings"}])
++(def str-legend
++  [{:key "safety" :label "Safety"  :color "#2f9e44"
++    :def "Your GPA/ACT are above average for incoming students here."}
++   {:key "target" :label "Target"  :color "#e8a93b"
++    :def "Your GPA/ACT are similar to incoming students here."}
++   {:key "reach"  :label "Reach"   :color "#c92a4a"
++    :def "Your GPA/ACT are below average for incoming students here."}])
 +
-+(def expected-outcomes-source
-+  "Louisiana Workforce Commission, SOC 29-1141")
-+
-+;; ----------------------------------------------------------------------------
-+;; What's Cool About This Program — differentiator callouts (NEW section)
-+;; ----------------------------------------------------------------------------
-+
-+(def whats-cool-callouts
-+  [{:tag "Pass Rate"
-+    :title "97% NCLEX-RN First-Attempt Pass Rate"
-+    :body (str "Above the Louisiana state average. 7× Louisiana Nightingale Award "
-+               "winner, including 2024 and 2025.")
-+    :accent "border-l-emerald-400 bg-emerald-50/60"}
-+   {:tag "Clinical Location"
-+    :title "Clinical Training in Your Hometown"
-+    :body (str "Final 3 semesters of nursing coursework at the SLU Baton Rouge Center "
-+               "on Essen Lane — not in Hammond. Clinical training happens in your hometown.")
-+    :accent "border-l-blue-400 bg-blue-50/60"}
-+   {:tag "Fast-Track"
-+    :title "EDGE Program — Direct Admission to Nursing"
-+    :body (str "Seniors with a 3.7+ GPA and 25+ ACT who apply by January 15 are "
-+               "guaranteed a nursing seat if they meet progression requirements.")
-+    :accent "border-l-violet-400 bg-violet-50/60"}
-+   {:tag "Scholarships"
-+    :title "Program Scholarships"
-+    :body (str "LaNeaf — Lilburn \"Lee\" Jones Scholarship in Nursing  ·  "
-+               "LaNeaf — Mary Seal and W.K. \"Bill\" Carlile Endowed Scholarship.")
-+    :link {:label "See Scholarships tab for full list →" :href "#"}
-+    :accent "border-l-amber-400 bg-amber-50/60"}])
++(def terms-to-know
++  [{:term "Safety / Target / Reach"
++    :def "How your academics compare to students this school usually admits — above average (Safety), similar (Target), or below (Reach)."}
++   {:term "Median"
++    :def "The middle value: half of people earn more, half earn less. A better gut-check than an average."}
++   {:term "Living wage"
++    :def "The income a single adult needs to cover basic costs (housing, food, transportation) in a given area — here, Baton Rouge."}])
 +
 +;; ----------------------------------------------------------------------------
-+;; Program-level prose sections
++;; Safety/Target/Reach classifier (Obney spec — ACT vs school 25th/75th)
++;; Safety = ACT ≥ 75th · Target = 25th–75th · Reach = < 25th · Open = no ACT.
 +;; ----------------------------------------------------------------------------
 +
-+(def overview-bullets
-+  ["4-year degree that prepares you to become a licensed Registered Nurse (RN) — the professional who provides direct patient care in hospitals, clinics, and surgical settings alongside doctors."
-+   "If you want a career where you are genuinely helping people through the hardest moments of their lives, this is a direct path to that work every day."
-+   "The BSN alone does not license you to practice. You also pass the NCLEX-RN — the national exam every new RN must clear to become licensed. Passing is what makes you a registered nurse."])
-+
-+(def career-summary-bullets
-+  ["Being an RN is a qualification, not a single job — your day depends entirely on where you practice."
-+   "Day-to-day: Record vitals and patient info. Administer medications and monitor reactions. Track and report changes in condition. Coordinate care with physicians and families."
-+   "Operating Room Nurse: Inside the surgical suite — prep patients before surgery, monitor during procedures, manage the sterile field alongside the team."
-+   "ICU Nurse: Care for the most critically ill patients including post-surgical recovery. High-stakes, high-judgment work with close, constant monitoring."
-+   "Important: Getting into SLU and getting into the nursing program are two separate steps. University admission is open — the nursing major is competitive. GPA matters from day one."
-+   "A BSN opens doors to advanced practice with additional degrees: Nurse Practitioner (NP), Certified Registered Nurse Anesthetist (CRNA), Clinical Nurse Specialist, Nurse Midwife."])
-+
-+(def career-paths
-+  [{:title "Registered Nurse (RN)"
-+    :desc "Licensed to provide direct patient care in hospitals, clinics, and surgical units. Requires passing the NCLEX-RN after graduation."}
-+   {:title "Operating Room Nurse"
-+    :desc "Works inside the surgical suite preparing patients, monitoring during procedures, and maintaining the sterile field alongside the surgical team."}
-+   {:title "Intensive Care Unit (ICU) Nurse"
-+    :desc "Cares for the most critically ill patients, including post-surgical recovery. High-stakes clinical environment requiring close monitoring and fast judgment."}
-+   {:title "Nurse Practitioner (NP)"
-+    :requirement "Requires MSN or DNP after BSN"
-+    :desc "Can diagnose, prescribe, and treat patients independently. Specialties include Family, Psychiatric-Mental Health, Pediatric, and Women's Health."}
-+   {:title "Certified Registered Nurse Anesthetist (CRNA)"
-+    :requirement "Requires doctoral degree after BSN"
-+    :desc "Administers anesthesia in surgical and procedural settings. Among the highest-earning professions in nursing. Most programs require at least one year of ICU experience to apply."}])
++(defn classify-str [student-act act-25 act-75]
++  (cond
++    (nil? act-25)            {:key "open"   :label "Open Admission" :color "#676868"}
++    (>= student-act act-75)  {:key "safety" :label "Safety" :color "#2f9e44"}
++    (>= student-act act-25)  {:key "target" :label "Target" :color "#e8a93b"}
++    :else                    {:key "reach"  :label "Reach"  :color "#c92a4a"}))
 +
 +;; ----------------------------------------------------------------------------
-+;; School-level sections (static across every program at the school)
++;; 4-year grad-rate norming — Obney spec bands/thresholds, COMPUTED exactly.
++;; Method: gr2024 bachelor's cohort (GRTYPE 8 adjusted cohort, GRTYPE 13 = completers
++;; within 100% normal time) ÷ → 4-yr rate; UG enrollment via ef2024a (EFALEVEL=2,
++;; LINE=99) sets the size band; band average is the mean 4-yr rate across LA public
++;; 4-years (bor_ipeds_bridge) in the SAME band. Indicator: High ≥ +5 pts vs band
++;; avg · Low ≤ −5 · Medium otherwise.
++;;   SLU 4-yr 26.3% · band 10,000–20,000 {ULL 26.9, SLU 26.3, LA Tech 44.5} avg 32.6%
++;;   → 26.3 − 32.6 = −6.3 pts → Low.
 +;; ----------------------------------------------------------------------------
 +
-+(def why-fits-stats
-+  [{:label "Acceptance Rate"            :value "94%"}
-+   {:label "4-Year Grad Rate"           :value "25%"}
-+   {:label "6-Year Grad Rate"           :value "44%"}
-+   {:label "6-Yr Grad · Black students" :value "33%"}
-+   {:label "First-Year Return"          :value "71%"}
-+   {:label "Black Enrollment"           :value "19.6%"}])
-+
-+(def why-fits-bullets
-+  ["Located about 45 miles from Baton Rouge — a regional public university offering a distinct campus setting while staying close to home."
-+   "ACT of 20 is above their 25th percentile (18) and below the 75th (24) — admission is extremely likely."
-+   "Total enrollment: 13,192 undergraduates. Black/African American students make up 19.6% of the student body — about 1 in 5."])
-+
-+(def financial-aid-bullets
-+  ["Annual tuition and fees: $8,373"
-+   "TOPS Opportunity covers $5,652 → remaining tuition: $2,721"
-+   "Pell Grant (estimated max $7,395) covers remaining $2,721 tuition; $4,674 applied toward housing"
-+   "Net tuition after TOPS + Pell: $0"
-+   "On-campus room and board: $10,240/yr · Books and supplies: $1,300/yr"
-+   "Estimated total annual net cost: ~$5,366 (primarily room, board, and books after aid)"
-+   "Average student debt at graduation: $22,113"])
-+
-+(def net-price-calculator-url
-+  "https://www.southeastern.edu/admin/fin_aid/cost/net_price_calculator/index.html")
++(def grad-rate-norm
++  {:status :final
++   :size-bands ["<5,000" "5,000–10,000" "10,000–20,000" ">20,000"]
++   :slu-band "10,000–20,000"           ;; SLU UG enrollment 13,192
++   :slu-rate 26.3
++   :band-average 32.6
++   :band-members 3
++   :delta -6.3
++   :indicator "Low"                    ;; ≤ −5 pts vs band average
++   :threshold "High ≥ +5 pts vs band avg · Low ≤ −5 pts · Medium otherwise"})
 +
 +;; ----------------------------------------------------------------------------
-+;; School + program shape (one school, one program for the demo; structured as
-+;; collections so the hierarchy renders identically with more)
++;; Per-pathway SECTION DISPLAY ORDER — Build Plan §3 order (1–4). Sections 5 & 6
++;; are school-anchored (render once per school, after the pathway-specific 1–4).
 +;; ----------------------------------------------------------------------------
++
++(def section-order
++  [:overview        ;; 1
++   :whats-cool      ;; 2
++   :salary          ;; 3
++   :careers])       ;; 4  (school-anchored 5 About-This-School + 6 Costs follow)
++
++;; ============================================================================
++;; SCHOOL (school-anchored data — keyed by UNITID, shared across all pathways)
++;; ============================================================================
 +
 +(def school
-+  {:name "Southeastern Louisiana University"
++  {:unitid "160612"
++   :name "Southeastern Louisiana University"
++   :short-name "Southeastern"
 +   :type "Public 4-Year"
++   :city "Hammond" :state "LA"
 +   :location "Hammond, LA"
 +   :distance "~45 miles from Baton Rouge"
-+   :acceptance "94%"
-+   :credentials ["BSN"]
-+   :programs
-+   [{:id "bsn"
-+     :title "Bachelor of Science in Nursing (BSN)"
-+     :track "Generic Baccalaureate Track"
-+     :credential "Bachelor's"
-+     :category "Safety"}]})
++   :website "https://www.southeastern.edu"
++   :website-label "southeastern.edu"
++   ;; Verified working campus-life page (web, Jun 2026).
++   :campus-life-url "https://www.southeastern.edu/campus_life/"
++   ;; Official Southeastern wordmark (shield + name), fetched from Wikimedia.
++   :logo "assets/slu-logo.png"
++
++   ;; --- Admissions (Obney spec: louisiana_programs) ---
++   :act-25 18 :act-75 24
++   :acceptance "99%"                 ;; acceptance_rate 0.9898 (was mislabeled 94% in v1)
++
++   ;; --- About This School: 3-figure callout (Build Plan §3.5) ---
++   :grad-rate-4yr "26%"              ;; gr2024 · 100%-time bachelor's completers · UNITID 160612 (26.3%)
++   :enrollment-total 13192          ;; ef2024a EFTOTLT
++   :enrollment-group-label "Black/African American"
++   :enrollment-group-count 2586     ;; ef2024a EFBKAAT (≈19.6% of total)
++   :enrollment-group-pct "19.6%"
++
++   ;; About-This-School narrative bullets
++   :setting "a regional public university with a traditional, residential campus feel while staying close to home"
++   :retention "71%"                 ;; ef2024d RET_PCF (shown as supporting context)
++
++   ;; --- What It Costs You (school-anchored; recomputed on BOR FY26) ---
++   :costs {:tuition 5777 :fees 3266 :tuition-fees 9043      ;; BOR FY26 (replaces IPEDS $8,373)
++           :room-board-on 10240 :room-board-off 11812
++           :books 1300
++           :coa 20583                                       ;; 9043 + 10240 + 1300
++           :tops 5652 :tops-name "TOPS Opportunity"         ;; LOSFA OPH (current-year)
++           :pell 7395                                        ;; pell-per-sem 3697.5 × 2
++           :net 7536                                         ;; 20583 − 5652 − 7395
++           :aid-covered 13047                                ;; coa − net (TOPS + Pell)
++           ;; Average debt at graduation = IPEDS institution-wide cumulative figure
++           ;; (the standard "debt at graduation"). The Scorecard loan-average-amount
++           ;; ($5,368) is a narrower per-borrower field and reads misleadingly low,
++           ;; so it's NOT used. No peer cumulative-debt source exists for a comparison.
++           :avg-debt 22113
++           ;; SLU's dedicated Net Price Calculator page is currently 404 on their own
++           ;; site (both /index.html and the directory). Link the WORKING cost &
++           ;; financial-aid page instead. TODO(Cameron): swap to the live NPC tool
++           ;; URL once SLU restores it (federal law requires every school have one).
++           :npc-url "https://www.southeastern.edu/admin/fin_aid/cost/"}
++
++   :pathways [:bsn]})
++
++;; ============================================================================
++;; PATHWAY — SLU BSN (everything discipline-specific is optional/conditional)
++;; ============================================================================
++
++(def bsn
++  {:id "bsn"
++   :name "Bachelor of Science in Nursing"
++   :acronym "BSN"
++   :track "Generic Baccalaureate Track"
++   :credential-level "Bachelor's"
++   :bachelors? true
++   :cip "51.38"
++   :primary-soc "29-1141"
++   :tags ["Nursing" "Bachelor's" "Safety net: high LA demand"]
++   ;; TODO(verify): exact BSN program page (School Addendum). The louisiana_programs
++   ;; row that matched SLU was a DNP cert, not the BSN — do NOT use it. Linked to
++   ;; the school site as a stand-in until the BSN program URL is confirmed.
++   :program-url "https://www.southeastern.edu"
++   :program-url-confirmed? false
++
++   ;; Licensure/exam — CONDITIONAL (omit for pathways with none).
++   :licensure-exam {:name "NCLEX-RN"
++                    :url "https://www.nclex.com/"
++                    :note "the national exam every new RN must pass to be licensed"}
++
++   ;; --- Section 1: Overview — exactly 6 bullets ---
++   :overview
++   {:credential-line
++    (str "The Bachelor of Science in Nursing (BSN) is a 4-year degree that prepares "
++         "you to become a licensed Registered Nurse (RN) — the professional who "
++         "provides direct patient care in hospitals, clinics, and surgical settings "
++         "alongside doctors.")
++    :student-connection
++    (str "It lines up directly with your interest in healthcare and helping people: "
++         "this is hands-on work supporting patients through the hardest moments of "
++         "their lives, every day.")
++    ;; CONDITIONAL caveat (Pathway Profile) — omit entirely if nil.
++    :caveat
++    (str "Heads up: being admitted to the university and being admitted to the "
++         "nursing program are two separate steps. University admission is open, but "
++         "the nursing major is competitive — your GPA matters from day one.")
++    ;; Bullets 4–6: exactly 3 day-to-day tasks (O*NET top tasks by importance, SOC 29-1141).
++    :day-to-day
++    ["Record patients' medical histories and symptoms, and monitor their vital signs and condition."
++     "Administer medications and treatments, then watch for and document patients' reactions."
++     "Coordinate care with physicians and families, and explain what to do for recovery at home."]}
++
++   ;; --- Section 2: What's Cool About This Program — ≤4 qualitative points ---
++   ;; (School Addendum: CDS + official site only. No quantitative data here.)
++   :whats-cool
++   [{:tag "Pass Rate"
++     :title "97% NCLEX-RN First-Attempt Pass Rate"
++     :body (str "Above the Louisiana state average, and a 7× Louisiana Nightingale "
++                "Award winner — including 2024 and 2025.")
++     :accent "border-l-[#05a09c] bg-[#d0ecef]/60"}
++    {:tag "Clinical Location"
++     :title "Clinical Training in Your Hometown"
++     :body (str "The final 3 semesters of nursing coursework happen at the SLU Baton "
++                "Rouge Center on Essen Lane — not in Hammond — so your clinicals are "
++                "close to home.")
++     :accent "border-l-[#007f81] bg-[#b1e1e9]/50"}
++    {:tag "Direct Admit"
++     :title "EDGE Program — Direct Admission to Nursing"
++     :body (str "Seniors with a 3.7+ GPA and 25+ ACT who apply by January 15 are "
++                "guaranteed a nursing seat as long as they meet progression "
++                "requirements.")
++     :accent "border-l-[#40bfbb] bg-[#d0ecef]/60"}
++    {:tag "Scholarships"
++     :title "Program-Specific Nursing Scholarships"
++     :body (str "Nursing students can apply for awards like the LaNeaf Lilburn "
++                "\"Lee\" Jones Scholarship in Nursing and the Mary Seal & W.K. "
++                "\"Bill\" Carlile Endowed Scholarship.")
++     :accent "border-l-[#2a6465] bg-[#d0ecef]/40"}]
++
++   ;; --- Section 3: Salary & Job Opportunities ---
++   :salary
++   {:chart-data
++    [{:name "1 Year Out"  :value 70105 :label "$70,105" :fill charts/color-earnings}
++     {:name "5 Years Out" :value 73162 :label "$73,162" :fill charts/color-earnings}
++     {:name "10 Years Out" :value 85313 :label "$85,313" :fill charts/color-earnings}
++     {:name "Living Wage —\nBaton Rouge\n(Single Adult)" :value 45496 :label "$45,496" :fill charts/color-col}
++     {:name "Living Wage —\nLouisiana\n(Single Adult)"   :value 42370 :label "$42,370" :fill charts/color-col}]
++    :chart-legend
++    [{:color charts/color-earnings :label "Southeastern BSN graduate earnings (median)"}
++     {:color charts/color-col :label "Living wage for a single adult"}]
++    ;; Living-wage band (Obney spec): Y1 $70,105 vs BR $45,496 = +54% → Above (>+15%).
++    :living-wage-band "Above"
++    :living-wage-sentence
++    (str "Based on first-year earnings, graduates of this program tend to earn "
++         "Above a living wage in Baton Rouge.")
++    :tiles
++    [{:kind :stars :value 5 :label "Job Demand (LWC)"
++      :detail "5-star = high demand — significantly more employers than qualified candidates in Louisiana."}
++     {:kind :stat :value "+7.55%" :label "10-Year Growth"
++      :detail "About 27,706 total openings projected statewide — steady, reliable hiring."}
++     {:kind :summary :value "Strong & stable"
++      :label "Bottom line"
++      :detail "High demand, pay well above a living wage, and clear room to grow into higher-paying nursing roles."}]}
++
++   ;; --- Section 4: Career Paths (O*NET-linked; advanced-cred flagged) ---
++   :careers
++   {:roles
++    [{:title "Registered Nurse (RN)" :soc "29-1141.00"
++      :desc "Provides direct patient care in hospitals, clinics, and surgical units. Requires passing the NCLEX-RN after graduation."}
++     {:title "Operating Room Nurse" :soc "29-1141.00"
++      :desc "Works inside the surgical suite — prepping patients, monitoring during procedures, and managing the sterile field with the team."}
++     {:title "Intensive Care Unit (ICU) Nurse" :soc "29-1141.03"
++      :desc "Cares for the most critically ill patients, including post-surgical recovery. High-stakes work needing close monitoring and fast judgment."}
++     {:title "Nurse Practitioner (NP)" :soc "29-1171.00"
++      :requirement "Requires an MSN or DNP after your BSN"
++      :desc "Can diagnose, prescribe, and treat patients independently. Specialties include Family, Psychiatric-Mental Health, Pediatric, and Women's Health."}
++     {:title "Certified Registered Nurse Anesthetist (CRNA)" :soc "29-1151.00"
++      :requirement "Requires a doctoral degree after your BSN"
++      :desc "Administers anesthesia in surgical settings — among the highest-earning nursing roles. Most programs want at least a year of ICU experience first."}]
++
++    ;; PUMS "what degree-holders actually do" — bachelor's only (real IPUMS data).
++    ;; degfieldd 6107 (Nursing), scope=Louisiana (total_in_field 38,185 ≥ 30),
++    ;; top 5 by weighted_n. in-field (CIP→SOC) is dominated by RN (62.8%), so the
++    ;; <50% callout does NOT fire here — but the flag is wired for other pathways.
++    :pums
++    {:scope "Louisiana"
++     :total-in-field 38185
++     :in-field-pct 63
++     :under-50-callout? false
++     ;; :onet = O*NET-SOC code (with .00) when a single occupation page exists;
++     ;; nil for broad census buckets with no single O*NET page (rendered unlinked).
++     :occupations
++     [{:title "Registered Nurses" :onet "29-1141.00" :pct "62.8%" :median 70000 :in-field? true}
++      {:title "Nurse Practitioners" :onet "29-1171.00"
++       :pct "8.1%" :median 113232 :in-field? true
++       :note "Census aggregate (SOC 29-11) — predominantly advanced-practice nurses; linked to the O*NET Nurse Practitioner profile."}
++      {:title "Medical & Health Services Managers" :onet "11-9111.00" :pct "2.9%" :median 107184 :in-field? false}
++      {:title "Postsecondary Teachers" :onet nil :pct "2.1%" :median 60000 :in-field? false}
++      {:title "Nurse Anesthetists" :onet "29-1151.00" :pct "1.9%" :median 191164 :in-field? true}]}}})
++
++;; A school may host multiple pathways; the demo has one. Sections 1–4 render per
++;; pathway; sections 5–6 render once from `school`.
++(def pathways [bsn])
 diff --git a/ui/advising-hub/src/components/rec_demo/interface.cljs b/ui/advising-hub/src/components/rec_demo/interface.cljs
 new file mode 100644
 index 0000000..bb144b3
@@ -733,18 +1042,44 @@ index 0000000..bb144b3
 +
 +(def rec-demo-page core/rec-demo-page)
 diff --git a/ui/advising-hub/src/components/router/core.cljs b/ui/advising-hub/src/components/router/core.cljs
-index a231c22..ca96613 100644
+index 2aa4672..ca96613 100644
 --- a/ui/advising-hub/src/components/router/core.cljs
 +++ b/ui/advising-hub/src/components/router/core.cljs
-@@ -9,6 +9,7 @@
+@@ -9,11 +9,10 @@
              [components.intake.interface :as intake]
              [components.hub.interface :as hub]
              [components.student.interface :as student]
 +            [components.rec-demo.interface :as rec-demo]
              [components.admin.interface :as admin]
+-            [components.privacy.core :as privacy]
              [components.senior-survey.core :as senior-survey]
              [components.short-link.core :as short-link]
-@@ -40,6 +41,8 @@
+-            [components.terms.core :as terms]
+             [components.gallery.interface :as gallery]
+             [components.context.interface :as context]
+             [store.auth.subs :as auth-subs]))
+@@ -25,8 +24,6 @@
+     ["/*path" {:name :auth-sub :view auth/main}]]
+    ["/intake" {:name :intake :view intake/main}]
+    ["/senior-intake" {:name :senior-intake :view senior-survey/main}]
+-   ["/privacy" {:name :privacy :view privacy/main}]
+-   ["/terms" {:name :terms :view terms/main}]
+    ["/student"
+     ["/recommendations" {:name :student-recommendations :view student/recommendations-page}]]
+    ;; Hub routes (staff UI) - using query params for IDs
+@@ -40,17 +37,12 @@
+      ["/meetings" {:name :hub-meetings :view hub/hub-meetings}]
+      ["/meeting" {:name :hub-meeting :view hub/hub-meeting}]
+      ["/transcript" {:name :hub-transcript :view hub/hub-transcript}]
+-     ["/recommendations" {:name :hub-recommendations :view hub/hub-recommendations}]]
+-    ["/guardians"
+-     ["/view" {:name :hub-guardian-detail :view hub/hub-guardian-detail}]]
+-    ["/messages"
+-     ["" {:name :hub-messages :view hub/hub-messages}]
+-     ["/templates" {:name :hub-message-templates :view hub/hub-message-templates}]
+-     ["/compose" {:name :hub-message-compose :view hub/hub-message-compose}]
+-     ["/broadcasts" {:name :hub-message-broadcast :view hub/hub-message-broadcast}]]]
++     ["/recommendations" {:name :hub-recommendations :view hub/hub-recommendations}]]]
     ["/admin"
      ["/recommendations" {:name :admin-recommendations :view admin/main}]]
     ["/dev/gallery" {:name :dev-gallery :view gallery/gallery-page}]
@@ -753,6 +1088,15 @@ index a231c22..ca96613 100644
     ["/r/:code" {:name :short-link-redirect :view short-link/redirect-page}]])
  
  (defonce router (rf/router routes))
+@@ -63,7 +55,7 @@
+ 
+ ;; Protected routes that require authentication
+ (def protected-routes
+-  #{:hub-dashboard :hub-advising :hub-fellows :hub-students :hub-student-detail :hub-meetings :hub-meeting :hub-transcript :hub-recommendations :hub-guardian-detail :hub-messages :hub-message-templates :hub-message-compose :hub-message-broadcast :admin-recommendations})
++  #{:hub-dashboard :hub-advising :hub-fellows :hub-students :hub-student-detail :hub-meetings :hub-meeting :hub-transcript :hub-recommendations :admin-recommendations})
+ 
+ (defui router-outlet []
+   (let [[current-match set-current-match!] (uix/use-state @match)
 diff --git a/ui/advising-hub/src/rec_demo/standalone.cljs b/ui/advising-hub/src/rec_demo/standalone.cljs
 new file mode 100644
 index 0000000..ef3a2a8
@@ -777,6 +1121,3 @@ index 0000000..ef3a2a8
 +
 +(defn init []
 +  (render))
--- 
-2.50.1 (Apple Git-155)
-

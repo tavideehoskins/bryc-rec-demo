@@ -1,11 +1,11 @@
 # Integrating the prototype into bryc-workshop
 
 Forking and direct pushes are disabled on `ObneyAI/bryc-workshop`, so this prototype
-is delivered as a patch. From a clean `bryc-workshop` checkout (default branch):
+is delivered as a patch (v2). From a clean `bryc-workshop` checkout (default branch):
 
 ```bash
 git checkout -b prototype/rec-ui-redesign
-git am integration/rec-ui-redesign.patch     # or: git apply <patch> for staged-only
+git apply integration/rec-ui-redesign.patch     # plain unified diff (add --3way if needed)
 ```
 
 This adds (no existing behavior changed):
@@ -14,6 +14,9 @@ This adds (no existing behavior changed):
 - `ui/advising-hub/src/components/router/core.cljs` — adds unauthenticated `/rec-demo` route
 - `ui/advising-hub/shadow-cljs.edn` — SPA push-state fallback + `:rec-demo` static build target
 - `ui/advising-hub/rec-demo-site/index.html` — host template
+
+**Brand assets:** copy the images in this repo's `assets/` (BRYC logo, advisor headshot,
+school wordmark) into `ui/advising-hub/rec-demo-site/assets/` — the page references them.
 
 ## Run locally
 ```bash
