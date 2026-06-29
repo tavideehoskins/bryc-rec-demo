@@ -1,18 +1,20 @@
-# BRYC Recommendation UI — Prototype (v2)
+# BRYC Recommendation UI — Prototype (v3)
 
-A clickable prototype of the proposed recommendation output format (SLU BSN exemplar),
-built to show the dev team the target student-facing UI.
+A clickable prototype of the proposed recommendation output, built to show the dev team the
+target student-facing UI.
 
 **Live demo:** https://tavideehoskins.github.io/bryc-rec-demo/
 
-v2 restructure: two-column layout (Advisor Messages · Pathway Recommendations),
-BRYC teal branding, a school tile whose pathways unfurl individually, and
-school-anchored **About This School** + **What It Costs You** sections. Content is
-hardcoded but sourced to match the Obney data spec (PSEO/BOR/IPEDS/LWC + real IPUMS
-PUMS outcomes) — no backend, no Notion calls. This is a static build of the standalone
-`rec-demo` page from the `bryc-workshop` ClojureScript app (UIx + shadcn/ui + Tailwind
-v4, charts via Recharts).
+**v3** adds a **three-tab menu** (Colleges · Short-Term · Scholarships), a **second college
+(BRCC, 2-year/CTE)** alongside SLU, and six sourced sample records — an AAS, a technical
+associate, a transfer associate, a certificate (LPN), an apprenticeship, and three scholarships
+— each a transferable template. Builds on the v2 two-column layout, teal branding, and
+school-anchored About/Costs sections. Content is hardcoded but **every field maps to a named
+source** (PSEO/BOR/IPEDS/LWC/O*NET/IPUMS + Career-OneStop scholarships) — no backend, no Notion
+calls. Static build of the standalone `rec-demo` page from the `bryc-workshop` ClojureScript app
+(UIx + shadcn/ui + Tailwind v4, Recharts).
 
 ## Source & integration
-- `source/` — the prototype ClojureScript source (UIx + shadcn/ui + Tailwind, Recharts charts), for browsing.
-- `integration/` — a patch to apply the prototype to `ObneyAI/bryc-workshop`, plus run/build instructions.
+- **`integration/V3_SPEC_AND_SOURCING.md`** — as-built field-by-field sourcing, data files added to the repo (+ iCloud link), acquisition items, and integration notes (**start here**).
+- `source/` — the prototype ClojureScript source, for browsing.
+- `integration/rec-ui-redesign.patch` + `integration/README.md` — apply the prototype to `ObneyAI/bryc-workshop`.

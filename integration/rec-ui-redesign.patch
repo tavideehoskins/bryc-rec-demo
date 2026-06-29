@@ -232,10 +232,10 @@ index 0000000..71e0224
 +                               :fontWeight "bold"})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/core.cljs b/ui/advising-hub/src/components/rec_demo/core.cljs
 new file mode 100644
-index 0000000..af3a1a9
+index 0000000..a54c3ef
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/core.cljs
-@@ -0,0 +1,476 @@
+@@ -0,0 +1,784 @@
 +(ns components.rec-demo.core
 +  "PROTOTYPE — Rec UI redesign demo page, v2 (route: /rec-demo).
 +
@@ -254,6 +254,7 @@ index 0000000..af3a1a9
 +   pathway. Section display order and grad-rate norming both follow the plan
 +   exactly (see data.cljs `section-order` and `grad-rate-norm`)."
 +  (:require [uix.core :as uix :refer [defui $ use-state]]
++            [clojure.string :as str]
 +            [components.rec-demo.data :as data]
 +            [components.rec-demo.charts :as charts]
 +            ["/gen/shadcn/components/ui/card" :as card]
@@ -265,6 +266,16 @@ index 0000000..af3a1a9
 +;; ============================================================================
 +
 +(defn onet-url [soc] (str "https://www.onetonline.org/link/summary/" soc))
++
++;; School logo — CONSISTENTLY ATTAINABLE for any school: a curated asset when one
++;; exists (:logo), otherwise a favicon derived from the school's website domain
++;; (works for every school with a domain — no per-school hand-fetching).
++;; Production-grade path: a curated per-UNITID logo store; this is the fallback.
++(defn favicon-url [website]
++  (when (seq website)
++    (let [domain (-> website (str/replace #"^https?://" "") (str/replace #"^www\." "")
++                     (str/split #"/") first)]
++      (str "https://icons.duckduckgo.com/ip3/" domain ".ico"))))
 +
 +(defui ext-link
 +  "Inline external link: hover tooltip (title), opens in a new tab (Build Plan §4)."
@@ -361,23 +372,88 @@ index 0000000..af3a1a9
 +                            (if hot? "text-white" "text-[#676868]"))} label)
 +       ($ :div {:class (str "text-xs leading-relaxed " (if hot? "text-white/90" "text-[#313335]"))} detail))))
 +
-+(defui salary-section [{:keys [pathway]}]
++(defn- demand-word [stars]
++  (cond (>= stars 4) "High demand" (= stars 3) "Steady demand" :else "Some demand"))
++
++(defui salary-section
++  "Two modes: PSEO program-earnings chart when :earnings is present (e.g. SLU BSN);
++   otherwise an LWC occupation-wage view, clearly labeled (CTE programs with no PSEO)."
++  [{:keys [pathway school]}]
 +  (let [s (:salary pathway)
++        area (or (:living-wage-area school) data/home-metro)
++        usd charts/usd
 +        band (:living-wage-band s)
 +        band-color (case band "Above" "#2f9e44" "Below" "#c92a4a" "#e8a93b")]
-+    ($ :div {:class "space-y-5"}
-+       ($ charts/salary-vs-col-chart
-+          {:title "Median Earnings vs. Cost of Living"
-+           :legend-items (:chart-legend s)
-+           :y-max 100000
-+           :data (:chart-data s)})
-+       ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
-+          "Based on first-year earnings, graduates of this pathway tend to earn "
-+          ($ :span {:class "font-bold" :style {:color band-color}} band)
-+          " a living wage in Baton Rouge.")
-+       ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
-+          (for [[i t] (map-indexed vector (:tiles s))]
-+            ($ salary-tile (assoc t :key i)))))))
++    (if (:earnings s)
++      ;; ---- PSEO mode (program-level earnings) ----
++      (let [stars (or (:lwc-stars pathway) 0)
++            chart-data
++            (concat
++              (for [e (:earnings s)]
++                {:name (:label e) :value (:value e) :label (usd (:value e)) :fill charts/color-earnings})
++              [{:name (str "Living Wage —\n" area "\n(Single Adult)")
++                :value (:living-wage-area-value s) :label (usd (:living-wage-area-value s)) :fill charts/color-col}
++               {:name (str "Living Wage —\n" data/home-state "\n(Single Adult)")
++                :value (:living-wage-state-value s) :label (usd (:living-wage-state-value s)) :fill charts/color-col}])
++            demand  (demand-word stars)
++            wage    (case band "Above" "earn above a living wage" "Near" "earn near a living wage"
++                               "Below" "earn below a living wage" "have competitive earnings")
++            verdict (cond (and (>= stars 4) (= band "Above")) "Strong & stable"
++                          (>= stars 3) "Solid" :else "Mixed")
++            tiles [{:kind :stars :value stars :label "Job Demand (LWC)"
++                    :detail (str "LWC rates this " stars " of 5 — " (.toLowerCase demand) " in " data/home-state ".")}
++                   {:kind :stat :value (:growth-rate s) :label "10-Year Growth"
++                    :detail (str "About " (:growth-openings s) " openings projected statewide — steady, reliable hiring.")}
++                   {:kind :summary :value verdict :label "Bottom line"
++                    :detail (str demand ". Graduates " wage ", with clear room to grow into higher-paying roles.")}]]
++        ($ :div {:class "space-y-5"}
++           ($ charts/salary-vs-col-chart
++              {:title "Median Earnings vs. Cost of Living"
++               :legend-items [{:color charts/color-earnings
++                               :label (str (:short-name school) " " (:acronym pathway) " graduate earnings (median)")}
++                              {:color charts/color-col :label "Living wage for a single adult"}]
++               :y-max 100000
++               :data chart-data})
++           ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
++              "Based on first-year earnings, graduates of this pathway tend to earn "
++              ($ :span {:class "font-bold" :style {:color band-color}} band)
++              (str " a living wage in " area "."))
++           ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
++              (for [[i t] (map-indexed vector tiles)]
++                ($ salary-tile (assoc t :key i))))))
++      ;; ---- LWC occupation mode (no PSEO for this school) ----
++      ;; Earnings chart degrades to a single occupation-wage bar vs. the living wage
++      ;; (Build Plan §5.2), clearly labeled occupation-level.
++      (let [o (:occupation s)
++            stars (or (:stars o) 0)
++            demand (demand-word stars)
++            chart-data
++            ;; short bar name (full occupation title is in the legend) to avoid x-axis overlap
++            [{:name "Typical Wage" :value (:median o) :label (usd (:median o)) :fill charts/color-earnings}
++             {:name (str "Living Wage —\n" area "\n(Single Adult)")
++              :value data/living-wage-area-amount :label (usd data/living-wage-area-amount) :fill charts/color-col}
++             {:name (str "Living Wage —\n" data/home-state "\n(Single Adult)")
++              :value data/living-wage-state-amount :label (usd data/living-wage-state-amount) :fill charts/color-col}]]
++        ($ :div {:class "space-y-4"}
++           ($ :div {:class "text-xs italic text-[#676868]"}
++              (str "Occupation-level wage (Louisiana Workforce Commission) — program-level "
++                   "(PSEO) earnings aren't published for this school, so this shows the typical "
++                   "statewide wage for " (:soc-title o) " (" (:education o) ")."))
++           ($ charts/salary-vs-col-chart
++              {:title "Typical Wage vs. Cost of Living"
++               :legend-items [{:color charts/color-earnings :label (str (:soc-title o) " — typical Louisiana wage")}
++                              {:color charts/color-col :label "Living wage for a single adult"}]
++               :y-max 110000
++               :data chart-data})
++           ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
++              "Based on the typical Louisiana wage for this occupation, workers tend to earn "
++              ($ :span {:class "font-bold" :style {:color band-color}} band)
++              (str " a living wage in " area "."))
++           ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-3"}
++              ($ salary-tile {:key 0 :kind :stars :value stars :label "Job Demand (LWC)"
++                              :detail (str "LWC rates this " stars " of 5 — " (.toLowerCase demand) " in " data/home-state ".")})
++              ($ salary-tile {:key 1 :kind :stat :value (:growth-pct o) :label "10-Year Growth"
++                              :detail (str "About " (:openings o) " openings projected statewide.")})))))))
 +
 +;; ============================================================================
 +;; Section 4 — Career Paths (O*NET-linked + advanced-cred flags + PUMS)
@@ -394,13 +470,13 @@ index 0000000..af3a1a9
 +             requirement)))
 +     ($ :p {:class "text-sm text-[#313335] leading-relaxed"} desc)))
 +
-+(defui pums-subsection [{:keys [pums]}]
++(defui pums-subsection [{:keys [pums field]}]
 +  ($ :div {:class "bg-[#f2f3f4] rounded-xl p-4 space-y-3"}
 +     ($ :div
 +        ($ :div {:class "text-sm font-semibold text-[#2a6465] font-head"}
 +           "What degree-holders actually do")
 +        ($ :p {:class "text-xs text-[#676868]"}
-+           (str "Where " (:scope pums) " nursing-degree holders actually work "
++           (str "Where " (:scope pums) " " (.toLowerCase (or field "")) "-degree holders actually work "
 +                "(field-of-degree data, not just this school).")))
 +     (when (:under-50-callout? pums)
 +       ($ :div {:class "rounded-lg bg-[#fff7e6] border border-[#e8a93b] p-3 text-sm text-[#9a6a00]"}
@@ -437,7 +513,7 @@ index 0000000..af3a1a9
 +           :label-less "Show fewer ▲"})
 +       ;; PUMS — bachelor's only (Build Plan §4 / spec)
 +       (when (and (:bachelors? pathway) pums)
-+         ($ pums-subsection {:pums pums})))))
++         ($ pums-subsection {:pums pums :field (:field pathway)})))))
 +
 +;; ============================================================================
 +;; Section 5 — About This School (school-anchored; 3-figure callout)
@@ -479,7 +555,7 @@ index 0000000..af3a1a9
 +           [($ :span nil
 +               (str "Located " (:distance school) " — " (:setting school) ". See ")
 +               ($ ext-link {:href (:campus-life-url school) :label "campus life"
-+                            :title "Southeastern — campus life"})
++                            :title (str (:short-name school) " — campus life")})
 +               ".")
 +            (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
 +                 (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
@@ -515,8 +591,100 @@ index 0000000..af3a1a9
 +             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
 +                          :title "studentaid.gov — complete the FAFSA"})
 +             " and receive your award letter to know your true cost."))
-+       ($ ext-link {:href (:npc-url c) :label "See Southeastern's cost & financial aid info →"
-+                    :title "Southeastern — Cost & Financial Aid"}))))
++       ($ ext-link {:href (:npc-url c) :label (str "See " (:short-name school) "'s cost & financial aid info →")
++                    :title (str (:short-name school) " — Cost & Financial Aid")}))))
++
++;; ============================================================================
++;; v3 per-type section renderers (CTE)
++;; ============================================================================
++
++(defui time-to-credential-section [{:keys [pathway]}]
++  ;; School-level time-to-degree (BOR CMPLTTD, when available) + PROGRAM-level
++  ;; completions/year (BOR CMPLRACE, by CIP). Each card only shows when its data exists.
++  (let [t (:time-to-credential pathway)
++        c (:completions pathway)
++        cards (cond-> []
++                t (into [[(:designed t) "Designed length"] [(:actual t) "Typical actual"]])
++                c (conj [(str (:per-year c)) "Graduates / year"]))
++        cols (case (count cards) 1 "grid-cols-1" 2 "grid-cols-2" "grid-cols-3")]
++    ($ :div {:class "space-y-3"}
++       ($ :div {:class (str "grid gap-3 " cols)}
++          (for [[i [v lbl]] (map-indexed vector cards)]
++            ($ :div {:key i :class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4 text-center"}
++               ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} v)
++               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"} lbl))))
++       (when (:actual-note t)
++         ($ :p {:class "text-xs text-[#676868] leading-relaxed"} (:actual-note t)))
++       (when c
++         ($ :p {:class "text-xs text-[#676868] leading-relaxed"}
++            (str "Graduates / year is program-specific — " (:per-year c) " completers in " (:year c)
++                 " (BOR completions by CIP, CMPLRACE)."))))))
++
++(defui transfer-plan-section [{:keys [pathway]}]
++  (let [tp (:transfer-plan pathway)
++        o (:outcomes tp)]
++    ($ :div {:class "space-y-4"}
++       ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4"}
++          ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-1"} "Transfer destination")
++          ($ :div {:class "text-base font-semibold text-[#2a6465] font-head"} (:destination tp))
++          ($ :p {:class "text-sm text-[#313335] mt-1 leading-relaxed"} (:framing tp)))
++       (when (:la-guarantee tp)
++         ($ :div {:class "rounded-xl bg-[#f3fafb] ring-1 ring-[#cdeaee] p-3 text-sm text-[#313335] leading-relaxed"}
++            ($ :span {:class "font-semibold text-[#2a6465]"} "Louisiana guarantee: ") (:la-guarantee tp)))
++       ;; Transfer→bachelor's outcomes (national; sourced & annotated)
++       (when o
++         ($ :div {:class "space-y-2"}
++            ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868]"}
++               "How transfer students do (national)")
++            ($ :div {:class "grid grid-cols-3 gap-2"}
++               (for [[i [v note]] (map-indexed vector [[(:transfer-rate o) (:transfer-rate-note o)]
++                                                       [(:transfer-bachelors o) (:transfer-bachelors-note o)]
++                                                       [(:overall o) (:overall-note o)]])]
++                 ($ :div {:key i :class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-3 text-center"}
++                    ($ :div {:class "text-xl font-bold text-[#2a6465] font-head"} v)
++                    ($ :div {:class "text-[11px] text-[#676868] mt-1 leading-snug"} note))))
++            ($ :p {:class "text-[11px] italic text-[#676868] leading-relaxed"} (:source o))))
++       ($ bullet-list {:bullets [(:cost-note tp) (:articulation-note tp)]})
++       (when (seq (:destination-careers tp))
++         ($ :div {:class "space-y-2"}
++            ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868]"}
++               "Where it leads (at the bachelor's)")
++            (for [[i r] (map-indexed vector (:destination-careers tp))]
++              ($ career-row (assoc r :key i))))))))
++
++(defui funding-section [{:keys [pathway]}]
++  (let [f (:funding pathway)
++        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
++    ($ :div {:class "space-y-3"}
++       ($ bullet-list
++          {:bullets
++           [(str "Tuition: about " (usd (:tuition f)) "/year (" (:tuition-flag f) ").")
++            (str "Pell Grant: up to " (usd (:pell f)) "/year for eligible students.")
++            (str (:tops f) (when (:commuter? f) "; commuter — no room & board in this estimate."))]})
++       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
++          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
++             ($ :span {:class "font-bold"} "Estimate only. ")
++             "Complete the "
++             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
++                          :title "studentaid.gov — complete the FAFSA"})
++             " to confirm your aid.")))))
++
++(defui earn-section [{:keys [pathway]}]
++  (let [w (:wage-progression pathway)]
++    ($ :div {:class "space-y-3"}
++       ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
++          ($ :span {:class "font-semibold text-[#2a6465]"} "Earn while you learn. ")
++          "You're paid as an apprentice from day one — no tuition debt.")
++       (when w
++         ($ :div {:class "grid grid-cols-2 gap-3"}
++            ($ :div {:class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4 text-center"}
++               ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} (:start w))
++               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"} "Starting wage"))
++            ($ :div {:class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4 text-center"}
++               ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} (:average w))
++               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"} "Average wage"))))
++       ($ :p {:class "text-xs text-[#676868] leading-relaxed"}
++          "Program length and the journey credential depend on the sponsor (your advisor can confirm via DOL Apprenticeship.gov)."))))
 +
 +;; ============================================================================
 +;; Per-pathway accordion (one-at-a-time) + school-anchored sections
@@ -536,63 +704,121 @@ index 0000000..af3a1a9
 +     ($ accordion/AccordionContent {:class "pb-5 pt-1 px-1.5"} children)))
 +
 +(def pathway-section-meta
-+  {:overview   {:heading "Overview"                      :render overview-section}
-+   :whats-cool {:heading "What's Cool About This Pathway" :render whats-cool-section}
-+   :salary     {:heading "Salary & Job Opportunities"    :render salary-section}
-+   :careers    {:heading "Career Paths"                  :render careers-section}})
++  {:overview           {:heading "Overview"                      :render overview-section}
++   :whats-cool         {:heading "What's Cool About This Pathway" :render whats-cool-section}
++   :salary             {:heading "Salary & Job Opportunities"    :render salary-section}
++   :careers            {:heading "Career Paths"                  :render careers-section}
++   :time-to-credential {:heading "Time & Completion"            :render time-to-credential-section}
++   :transfer-plan      {:heading "Transfer Plan"                 :render transfer-plan-section}
++   :funding            {:heading "Cost & Funding"               :render funding-section}
++   :earn               {:heading "Earn While You Learn"         :render earn-section}})
 +
 +(defui pathway-sections
-+  "The pathway-specific sections (1–4) as a one-at-a-time accordion, Build Plan §3 order."
-+  [{:keys [pathway]}]
++  "The pathway-specific sections (1–4) as a one-at-a-time accordion, Build Plan §3 order.
++   school/student are threaded through so school-aware sections (e.g. salary copy) can
++   self-assemble their strings rather than hardcode them."
++  [{:keys [pathway school student]}]
++  ;; Per-pathway :sections drives which sections show (CTE programs differ from the
++  ;; 4-year); falls back to the global section-order so the existing SLU BSN is unchanged.
 +  ($ accordion/Accordion {:type "single" :collapsible true :default-value "overview"
 +                          :class "space-y-3"}
-+     (for [k data/section-order
++     (for [k (or (:sections pathway) data/section-order)
 +           :let [{:keys [heading render]} (pathway-section-meta k)]]
 +       ($ section-item {:key (name k) :value (name k) :heading heading}
-+          ($ render {:pathway pathway})))))
++          ($ render {:pathway pathway :school school :student student})))))
++
++(defn pathway-chips
++  "Chips DERIVED per-pathway from sourced fields, so a school with several programs
++   shows each program's own descriptors (Build Plan §6 transferability):
++     • field        — short discipline from the program CIP title
++     • credential   — award_level_name (Bachelor's / Associate / Certificate)
++     • demand       — CONDITIONAL on the primary SOC's LWC star rating
++   The demand chip varies program-to-program (different CIP → SOC → rating) and is
++   omitted when demand is unremarkable."
++  [{:keys [field credential-level lwc-stars]}]
++  (->> [field
++        credential-level
++        (cond
++          (>= (or lwc-stars 0) 4) "High demand"
++          (= lwc-stars 3)         "Steady demand"
++          :else                   nil)]
++       (remove nil?)))
 +
 +(defui pathway-row
 +  "A recommended pathway that unfurls its own details when clicked (v1 model).
 +   Multiple pathways can sit under one school; each unfurls independently, while
 +   About This School + What It Costs You are anchored once to the school below."
-+  [{:keys [pathway default-open?]}]
++  [{:keys [pathway school student default-open?]}]
 +  (let [[open? set-open!] (use-state (boolean default-open?))]
 +    ($ :div {:class "bg-white rounded-xl shadow-sm ring-1 ring-[#bcdfe5] overflow-hidden"}
 +       ($ :button {:class "w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-[#f3fafb] transition-colors"
 +                   :on-click #(set-open! not)}
 +          ($ :div {:class "min-w-0"}
 +             ($ :div {:class "font-semibold text-[#2a6465] font-head"}
-+                (str (:name pathway) " (" (:acronym pathway) ")"))
-+             ($ :div {:class "text-sm text-[#676868] mt-0.5"} (:track pathway)))
++                (str (:name pathway) (when (:acronym pathway) (str " (" (:acronym pathway) ")"))))
++             ($ :div {:class "text-sm text-[#676868] mt-0.5"} (:track pathway))
++             ;; Per-pathway chips (field · credential · demand) — derived, not hardcoded.
++             ($ :div {:class "flex flex-wrap gap-2 mt-2"}
++                (for [t (pathway-chips pathway)]
++                  ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t))))
 +          ($ :span {:class "shrink-0 text-sm font-semibold text-[#007f81]"}
 +             (if open? "Hide ▲" "View pathway ▼")))
 +       (when open?
 +         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4]"}
-+            ($ pathway-sections {:pathway pathway}))))))
++            ($ pathway-sections {:pathway pathway :school school :student student}))))))
++
++;; CTE schools (2-year) get a MINIMAL About + simple cost — no STR/grad/campus (§5.4).
++(defui cte-about-section [{:keys [school]}]
++  ($ bullet-list
++     {:bullets
++      [(str (:name school) " is a " (:sector school) " in " (:location school) ".")
++       (str "Open-admission and commuter-friendly — " (:distance school) ".")]}))
++
++(defui cte-costs-section [{:keys [school]}]
++  (let [c (:costs school)
++        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
++    ($ :div {:class "space-y-3"}
++       ($ bullet-list
++          {:bullets
++           [(str "Tuition: about " (usd (:tuition c)) "/year (" (:tuition-flag c) ").")
++            (str "Pell Grant: up to " (usd (:pell c)) "/year for eligible students.")
++            (str (:tops c) "; as a Title IV school, federal aid applies.")
++            "Commuter program — no room & board in this estimate."]})
++       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
++          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
++             ($ :span {:class "font-bold"} "Estimate only. ")
++             "Complete the "
++             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
++                          :title "studentaid.gov — complete the FAFSA"})
++             " to confirm your aid and net cost.")))))
 +
 +(defui school-sections
-+  "School-anchored sections — rendered ONCE per school, shared across all pathways."
++  "School-anchored sections — rendered ONCE per school. CTE (2-year) gets minimal
++   About + simple cost; universities get the full callout + cost waterfall."
 +  [{:keys [school student]}]
-+  ;; Default-open + anchored under the pathways (collapsible, but shown unfurled).
-+  ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
-+                          :class "space-y-3"}
-+     ($ section-item {:value "about-school" :heading "About This School" :tint? true}
-+        ($ about-school-section {:school school :student student}))
-+     ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
-+        ($ costs-section {:school school}))))
++  (let [cte? (= (:kind school) :cte)]
++    ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
++                            :class "space-y-3"}
++       ($ section-item {:value "about-school" :heading "About This School" :tint? true}
++          (if cte? ($ cte-about-section {:school school})
++                   ($ about-school-section {:school school :student student})))
++       ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
++          (if cte? ($ cte-costs-section {:school school})
++                   ($ costs-section {:school school}))))))
 +
 +(defui school-expanded
 +  "What unfurls under a school tile: the recommended pathways (each unfurls its own
-+   1–4 sections) followed by the school-anchored About This School + What It Costs You."
++   sections) followed by the school-anchored About This School + What It Costs You."
 +  [{:keys [school student]}]
-+  ($ :div {:class "space-y-5"}
-+     ($ :div {:class "space-y-3"}
-+        ($ section-eyebrow {:label (str (count data/pathways) " Recommended Pathway"
-+                                        (when (> (count data/pathways) 1) "s"))})
-+        ;; Pathways start COLLAPSED — the student clicks one to unfurl its details.
-+        (for [p data/pathways]
-+          ($ pathway-row {:key (:id p) :pathway p :default-open? false})))
-+     ($ school-sections {:school school :student student})))
++  (let [ps (get data/college-pathways (:unitid school) [])]
++    ($ :div {:class "space-y-5"}
++       ($ :div {:class "space-y-3"}
++          ($ section-eyebrow {:label (str (count ps) " Recommended Pathway"
++                                          (when (> (count ps) 1) "s"))})
++          ;; Pathways start COLLAPSED — the student clicks one to unfurl its details.
++          (for [p ps]
++            ($ pathway-row {:key (:id p) :pathway p :school school :student student :default-open? false})))
++       ($ school-sections {:school school :student student}))))
 +
 +;; ============================================================================
 +;; School tile (Pathway Recommendations) — Learn More expander
@@ -605,10 +831,17 @@ index 0000000..af3a1a9
 +       ($ :div {:class "p-5 space-y-3"}
 +          ;; Logo + Safety/Target/Reach badge — vertically centered together.
 +          ($ :div {:class "flex items-center justify-between gap-4"}
++             ;; Curated wordmark (includes the name) when available; otherwise a
++             ;; domain-derived favicon + the school name — consistent for any school.
 +             (if (:logo school)
 +               ($ :img {:src (:logo school) :alt (:name school)
 +                        :class "h-9 md:h-10 w-auto object-contain"})
-+               ($ :h3 {:class "text-lg font-semibold text-[#2a6465] font-head"} (:name school)))
++               ($ :div {:class "flex items-center gap-2 min-w-0"}
++                  (when-let [f (favicon-url (:website school))]
++                    ($ :img {:src f :alt "" :class "w-7 h-7 rounded shrink-0"}))
++                  ($ :h3 {:class "text-lg font-semibold text-[#2a6465] font-head"} (:name school))))
++             ;; Selective schools show Safety/Target/Reach; open-admission schools
++             ;; (no ACT — e.g. 2-year/CTE) show a neutral "Open Admission" chip.
 +             ($ str-badge {:classification cls}))
 +          ($ :div {:class "flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#676868]"}
 +             ($ :span (str (:city school) ", " (:state school)))
@@ -616,11 +849,8 @@ index 0000000..af3a1a9
 +             ($ :span "·")
 +             ($ ext-link {:href (:website school) :label (:website-label school)
 +                          :title (:website school) :class "text-sm"}))
-+          ;; -ml-2.5 cancels the first pill's left padding so the tag TEXT lines up
-+          ;; with the city name above it.
-+          ($ :div {:class "flex flex-wrap gap-2 -ml-2.5"}
-+             (for [t (:tags (first data/pathways))]
-+               ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t)))
++          ;; School-level chips removed — descriptors are per-pathway now (see pathway-row),
++          ;; since programs at one school vary in field, credential, and demand.
 +          ($ :button {:class "mt-1 w-full rounded-xl bg-[#05a09c] hover:bg-[#007f81] text-white font-semibold py-2.5 transition-colors"
 +                      :on-click #(set-open! not)}
 +             (if open? "Show Less ▲" "Learn More ▼")))
@@ -681,14 +911,92 @@ index 0000000..af3a1a9
 +             ($ :dt {:class "font-semibold text-[#313335] inline"} (str term ": "))
 +             ($ :dd {:class "inline text-[#676868]"} def))))))
 +
-+(defui recommendations-column [{:keys [school student]}]
++;; --- Short-Term program card (certificate / apprenticeship) — standalone, reuses
++;;     the same section system as a school's pathway, with the provider shown. ---
++(defui short-term-card [{:keys [program student default-open?]}]
++  (let [[open? set-open!] (use-state (boolean default-open?))]
++    ($ :div {:class "bg-white rounded-xl shadow-sm ring-1 ring-[#bcdfe5] overflow-hidden"}
++       ($ :button {:class "w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-[#f3fafb] transition-colors"
++                   :on-click #(set-open! not)}
++          ($ :div {:class "min-w-0"}
++             ($ :div {:class "font-semibold text-[#2a6465] font-head"}
++                (str (:name program) (when (:acronym program) (str " (" (:acronym program) ")"))))
++             ($ :div {:class "text-sm text-[#676868] mt-0.5"}
++                (str (:provider program) " · " (:credential-level program)))
++             ($ :div {:class "flex flex-wrap gap-2 mt-2"}
++                (for [t (pathway-chips program)]
++                  ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t))))
++          ($ :span {:class "shrink-0 text-sm font-semibold text-[#007f81]"}
++             (if open? "Hide ▲" "View ▼")))
++       (when open?
++         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4] space-y-3"}
++            ($ pathway-sections {:pathway program :school nil :student student})
++            (when (:info-url program)
++              ($ :div {:class "px-1"}
++                 ($ ext-link {:href (:info-url program)
++                              :label "Learn more about this program →"
++                              :title (:provider program)}))))))))
++
++;; --- Scholarship card (mirrors the production card shape) ---
++(defui scholarship-card [{:keys [s]}]
++  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#bcdfe5] p-5 space-y-3"}
++     ($ :div {:class "flex items-start justify-between gap-3"}
++        ($ :div {:class "min-w-0"}
++           ($ :div {:class "font-semibold text-[#2a6465] font-head text-base"} (:name s))
++           ($ :div {:class "text-sm text-[#676868]"} (:sponsor s)))
++        ($ :div {:class "text-right shrink-0"}
++           ($ :div {:class "text-xl font-bold text-[#05a09c] font-head"} (:award s))
++           ($ :div {:class "text-xs text-[#676868]"} (str "Due " (:deadline s)))))
++     ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-3 text-sm text-[#313335] leading-relaxed"}
++        ($ :span {:class "font-semibold text-[#2a6465]"} "Why it fits: ") (:why-fits s))
++     ($ bullet-list {:bullets [(str "Eligibility: " (:eligibility s))
++                               (str "Open to: " (:target-levels s) " students")
++                               (:selection s)]})
++     ($ :div
++        ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-1"} "Application tips")
++        ($ bullet-list {:bullets (:tips s)}))
++     ($ ext-link {:href (:url s) :label "Apply / learn more →" :title (:name s)})))
++
++;; --- Tabs ---
++(defui tab-button [{:keys [label active? on-click]}]
++  ($ :button {:class (str "flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors "
++                          (if active? "bg-[#05a09c] text-white" "text-[#2a6465] hover:bg-[#d0ecef]/60"))
++              :on-click on-click}
++     label))
++
++(defui colleges-tab [{:keys [student]}]
 +  ($ :div {:class "space-y-4"}
-+     ($ :h2 {:class "text-xl font-semibold text-[#2a6465] font-head"} "Check these out:")
 +     ($ str-legend)
 +     ($ :div {:class "space-y-3"}
 +        ($ section-eyebrow {:label "Pathway Recommendations"})
-+        ($ school-tile {:school school :student student}))
++        (for [sch data/colleges-schools]
++          ($ school-tile {:key (:unitid sch) :school sch :student student})))
 +     ($ terms-to-know)))
++
++(defui short-term-tab [{:keys [student]}]
++  ($ :div {:class "space-y-3"}
++     ($ section-eyebrow {:label "Short-Term Training"})
++     (for [p data/short-term-programs]
++       ($ short-term-card {:key (:id p) :program p :student student}))))
++
++(defui scholarships-tab []
++  ($ :div {:class "space-y-3"}
++     ($ section-eyebrow {:label "Scholarships"})
++     (for [s data/scholarship-list]
++       ($ scholarship-card {:key (:id s) :s s}))))
++
++(defui recommendations-column [{:keys [student]}]
++  (let [[tab set-tab!] (use-state :colleges)]
++    ($ :div {:class "space-y-4"}
++       ($ :h2 {:class "text-xl font-semibold text-[#2a6465] font-head"} "Check these out:")
++       ($ :div {:class "flex gap-1 bg-white rounded-xl ring-1 ring-[#d0ecef] p-1"}
++          ($ tab-button {:label "Colleges"     :active? (= tab :colleges)     :on-click #(set-tab! :colleges)})
++          ($ tab-button {:label "Short-Term"   :active? (= tab :short-term)   :on-click #(set-tab! :short-term)})
++          ($ tab-button {:label "Scholarships" :active? (= tab :scholarships) :on-click #(set-tab! :scholarships)}))
++       (case tab
++         :colleges     ($ colleges-tab {:student student})
++         :short-term   ($ short-term-tab {:student student})
++         :scholarships ($ scholarships-tab)))))
 +
 +;; ============================================================================
 +;; Page
@@ -711,13 +1019,13 @@ index 0000000..af3a1a9
 +             ($ :div {:class "lg:col-span-4 lg:sticky lg:top-6"}
 +                ($ advisor-messages {:advisor data/advisor}))
 +             ($ :div {:class "lg:col-span-8"}
-+                ($ recommendations-column {:school data/school :student s})))))))
++                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..a75f6ad
+index 0000000..f0c986b
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,313 @@
+@@ -0,0 +1,573 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -733,7 +1041,20 @@ index 0000000..a75f6ad
 +   Both previously-flagged items now follow the plan exactly:
 +     • SECTION DISPLAY ORDER — Build Plan §3 order, in `section-order`.
 +     • 4-YR GRAD-RATE NORMING — spec bands/thresholds, computed in `grad-rate-norm`."
-+  (:require [components.rec-demo.charts :as charts]))
++  ;; Pure data namespace — no presentation deps; the components assemble all display
++  ;; strings (chart names, legends, copy) from these fields.
++  )
++
++;; ----------------------------------------------------------------------------
++;; BRYC home region — the single source for the living-wage benchmark + "distance
++;; from" framing. One place to change; every metro/state reference derives from it.
++;; ----------------------------------------------------------------------------
++
++(def home-metro "Baton Rouge")
++(def home-state "Louisiana")
++;; MIT Living Wage — single adult (shared benchmark; drives the cost-of-living bars).
++(def living-wage-area-amount 45496)   ;; Baton Rouge MSA
++(def living-wage-state-amount 42370)  ;; Louisiana
 +
 +;; ----------------------------------------------------------------------------
 +;; Student profile / intake
@@ -785,12 +1106,17 @@ index 0000000..a75f6ad
 +    :def "Your GPA/ACT are below average for incoming students here."}])
 +
 +(def terms-to-know
-+  [{:term "Safety / Target / Reach"
-+    :def "How your academics compare to students this school usually admits — above average (Safety), similar (Target), or below (Reach)."}
-+   {:term "Median"
++  [{:term "Median"
 +    :def "The middle value: half of people earn more, half earn less. A better gut-check than an average."}
 +   {:term "Living wage"
-+    :def "The income a single adult needs to cover basic costs (housing, food, transportation) in a given area — here, Baton Rouge."}])
++    :def (str "The income a single adult needs to cover basic costs (housing, food, "
++              "transportation) in a given area — here, " home-metro ".")}
++   {:term "Net cost"
++    :def "What you actually pay after grants and scholarships — not the sticker price."}
++   {:term "TOPS"
++    :def "Louisiana's state scholarship that helps cover tuition for eligible in-state students (TOPS-Tech for 2-year/technical programs)."}
++   {:term "Pell Grant"
++    :def "A federal grant for students with financial need — money you don't repay."}])
 +
 +;; ----------------------------------------------------------------------------
 +;; Safety/Target/Reach classifier (Obney spec — ACT vs school 25th/75th)
@@ -848,7 +1174,8 @@ index 0000000..a75f6ad
 +   :type "Public 4-Year"
 +   :city "Hammond" :state "LA"
 +   :location "Hammond, LA"
-+   :distance "~45 miles from Baton Rouge"
++   :distance (str "~45 miles from " home-metro)   ;; "~45 miles" is per-school; home-metro is shared
++   :living-wage-area home-metro                    ;; MIT living-wage benchmark metro (drives salary copy)
 +   :website "https://www.southeastern.edu"
 +   :website-label "southeastern.edu"
 +   ;; Verified working campus-life page (web, Jun 2026).
@@ -902,11 +1229,14 @@ index 0000000..a75f6ad
 +   :name "Bachelor of Science in Nursing"
 +   :acronym "BSN"
 +   :track "Generic Baccalaureate Track"
-+   :credential-level "Bachelor's"
++   :credential-level "Bachelor's"      ;; chip 2 — award_level_name (Scorecard/IPEDS)
 +   :bachelors? true
 +   :cip "51.38"
 +   :primary-soc "29-1141"
-+   :tags ["Nursing" "Bachelor's" "Safety net: high LA demand"]
++   :field "Nursing"                     ;; chip 1 — short field from the CIP title (CIP 51.38 = Registered Nursing)
++   :lwc-stars 5                         ;; chip 3 source — LWC demand rating for the primary SOC (louisiana_occupation_wages)
++   ;; Chips are DERIVED per-pathway from the three fields above (see core/pathway-chips),
++   ;; so a school with several programs shows each program's own field/credential/demand.
 +   ;; TODO(verify): exact BSN program page (School Addendum). The louisiana_programs
 +   ;; row that matched SLU was a DNP cert, not the BSN — do NOT use it. Linked to
 +   ;; the school site as a stand-in until the BSN program URL is confirmed.
@@ -968,29 +1298,18 @@ index 0000000..a75f6ad
 +     :accent "border-l-[#2a6465] bg-[#d0ecef]/40"}]
 +
 +   ;; --- Section 3: Salary & Job Opportunities ---
++   ;; Raw sourced values only. The chart bar names, legend, banded sentence, and the
++   ;; three tiles are ASSEMBLED in core/salary-section from these + school fields, so
++   ;; nothing is hardwired to this school/metro/discipline.
 +   :salary
-+   {:chart-data
-+    [{:name "1 Year Out"  :value 70105 :label "$70,105" :fill charts/color-earnings}
-+     {:name "5 Years Out" :value 73162 :label "$73,162" :fill charts/color-earnings}
-+     {:name "10 Years Out" :value 85313 :label "$85,313" :fill charts/color-earnings}
-+     {:name "Living Wage —\nBaton Rouge\n(Single Adult)" :value 45496 :label "$45,496" :fill charts/color-col}
-+     {:name "Living Wage —\nLouisiana\n(Single Adult)"   :value 42370 :label "$42,370" :fill charts/color-col}]
-+    :chart-legend
-+    [{:color charts/color-earnings :label "Southeastern BSN graduate earnings (median)"}
-+     {:color charts/color-col :label "Living wage for a single adult"}]
-+    ;; Living-wage band (Obney spec): Y1 $70,105 vs BR $45,496 = +54% → Above (>+15%).
-+    :living-wage-band "Above"
-+    :living-wage-sentence
-+    (str "Based on first-year earnings, graduates of this program tend to earn "
-+         "Above a living wage in Baton Rouge.")
-+    :tiles
-+    [{:kind :stars :value 5 :label "Job Demand (LWC)"
-+      :detail "5-star = high demand — significantly more employers than qualified candidates in Louisiana."}
-+     {:kind :stat :value "+7.55%" :label "10-Year Growth"
-+      :detail "About 27,706 total openings projected statewide — steady, reliable hiring."}
-+     {:kind :summary :value "Strong & stable"
-+      :label "Bottom line"
-+      :detail "High demand, pay well above a living wage, and clear room to grow into higher-paying nursing roles."}]}
++   {:earnings [{:label "1 Year Out"  :value 70105}     ;; PSEO median earnings (y1/y5/y10)
++               {:label "5 Years Out" :value 73162}
++               {:label "10 Years Out" :value 85313}]
++    :living-wage-area-value 45496       ;; MIT Living Wage — single adult, home metro
++    :living-wage-state-value 42370      ;; MIT Living Wage — single adult, home state
++    :living-wage-band "Above"           ;; computed: Y1 70,105 vs BR 45,496 = +54% → Above (>+15%)
++    :growth-rate "+7.55%"               ;; LWC 10-yr growth, primary SOC
++    :growth-openings "27,706"}          ;; LWC projected openings, primary SOC
 +
 +   ;; --- Section 4: Career Paths (O*NET-linked; advanced-cred flagged) ---
 +   :careers
@@ -1031,6 +1350,255 @@ index 0000000..a75f6ad
 +;; A school may host multiple pathways; the demo has one. Sections 1–4 render per
 +;; pathway; sections 5–6 render once from `school`.
 +(def pathways [bsn])
++
++;; ============================================================================
++;; v3 — CTE / Short-Term / Scholarships samples (ADDITIVE; nothing above changed).
++;; Every value sourced from the repo: louisiana_programs, louisiana_occupation_wages
++;; (LWC), cip_soc_crosswalk, O*NET tasks, BOR CMPLTTD, career_onestop scholarships.
++;; Unsourced fields are omitted (never placeheld). Per-record :sections drives which
++;; pathway sections render; :salary uses :occupation (LWC) when there's no PSEO.
++;; ============================================================================
++
++;; --- Baton Rouge Community College (2-year / CTE home for the samples) --------
++(def brcc
++  {:unitid "437103"
++   :name "Baton Rouge Community College"
++   :short-name "BRCC"
++   :type "Public 2-Year"
++   :kind :cte                          ;; suppresses STR badge / grad-norming / campus life
++   :city "Baton Rouge" :state "LA"
++   :location "Baton Rouge, LA"
++   :distance "In Baton Rouge"          ;; distance_from_baton_rouge_miles = 0
++   :sector "Public, 2-year"
++   :logo "assets/brcc-logo.jpg"        ;; official BRCC wordmark (Wikimedia)
++   :website "https://www.mybrcc.edu"
++   :website-label "mybrcc.edu"
++   ;; Minimal cost (per decision: 2-year = minimal). Scorecard tuition-only (flag);
++   ;; no room/board (commuter). Pell/TOPS-Tech per louisiana_programs + LOSFA.
++   :costs {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
++           :pell 7395 :tops "TOPS-Tech eligible"
++           :commuter? true}})
++
++;; --- Colleges tab · 2-year AAS: BRCC Associate Degree Nursing (ADN) -----------
++(def adn
++  {:id "adn" :school :brcc :type :aas
++   :name "Associate Degree Nursing" :acronym "ADN"
++   :track "Registered Nursing/Registered Nurse" :credential-level "Associate's"
++   :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
++   :lwc-stars 5
++   :completions {:per-year 131 :year "2024"}   ;; program-specific (BOR CMPLRACE, CIP 51.3801, BRCC)
++   :sections [:overview :salary :careers :time-to-credential]
++   :overview
++   {:credential-line
++    (str "The Associate Degree Nursing (ADN) is a ~2-year community-college degree that "
++         "qualifies you to sit for the NCLEX-RN and become a licensed Registered Nurse — "
++         "the same licensure exam as the 4-year BSN.")
++    :student-connection
++    "Like the BSN, it leads straight into hands-on patient care — a faster, lower-cost route into nursing."
++    :caveat nil
++    :day-to-day
++    ["Record patients' medical histories and symptoms and monitor their vital signs and condition."
++     "Administer medications and treatments, then watch for and document patients' reactions."
++     "Coordinate care with physicians and families and explain at-home recovery steps."]}
++   :licensure-exam {:name "NCLEX-RN" :url "https://www.nclex.com/"
++                    :note "the national exam every new RN must pass to be licensed (pass rate not in repo — advisor verify)"}
++   ;; No PSEO for BRCC → occupation-level wage (LWC), clearly labeled.
++   :salary {:occupation {:soc-title "Registered Nurses" :soc "29-1141"
++                         :median 76636 :stars 5 :growth-pct "+7.55%" :openings "27,706"
++                         :education "Bachelor's typical for the occupation; the ADN qualifies you for the same RN license"}
++            :living-wage-band "Above"}   ;; $76,636 vs BR $45,496 = +68%
++   :careers {:roles
++             [{:title "Registered Nurse (RN)" :soc "29-1141.00"
++               :desc "Provides direct patient care in hospitals, clinics, and surgical units. Requires passing the NCLEX-RN after graduation."}
++              {:title "Operating Room Nurse" :soc "29-1141.00"
++               :desc "Works in the surgical suite — prepping patients, monitoring during procedures, and managing the sterile field."}
++              {:title "Intensive Care Unit (ICU) Nurse" :soc "29-1141.03"
++               :desc "Cares for the most critically ill patients — high-stakes work needing close monitoring and fast judgment."}
++              {:title "Nurse Practitioner (NP)" :soc "29-1171.00"
++               :requirement "Requires a BSN, then an MSN or DNP"
++               :desc "Diagnoses, prescribes, and treats patients. From the ADN, bridge to a BSN first, then graduate study."}
++              {:title "Certified Registered Nurse Anesthetist (CRNA)" :soc "29-1151.00"
++               :requirement "Requires a BSN, then a doctoral degree"
++               :desc "Administers anesthesia — among the highest-earning nursing roles. Bridge to a BSN, then doctoral study."}]}
++   :time-to-credential
++   {:designed "~2 years full-time"
++    :actual "≈4.6 years"
++    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
++
++;; --- Colleges tab · technical associate: BRCC Industrial Production Tech -------
++(def industrial
++  {:id "industrial" :school :brcc :type :aas
++   :name "Industrial Production Technologies" :acronym nil
++   :track "Industrial Production Technologies/Technicians" :credential-level "Associate's"
++   :cip "15.0699" :field "Industrial Technology" :primary-soc "17-3026"
++   :lwc-stars 5
++   :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
++   :sections [:overview :salary :careers :time-to-credential]
++   :overview
++   {:credential-line
++    (str "A ~2-year associate that prepares you for technical roles keeping manufacturing "
++         "and production systems running — testing, quality, and process work.")
++    :student-connection nil :caveat nil
++    :day-to-day
++    ["Test products at set stages of production for performance and adherence to specs."
++     "Compile and evaluate statistical data to maintain product quality and reliability."
++     "Study time, motion, and methods to set standard production procedures."]}
++   :salary {:occupation {:soc-title "Industrial Engineering Technologists & Technicians" :soc "17-3026"
++                         :median 99602 :stars 5 :growth-pct "+15.9%" :openings "588"
++                         :education "Associate's degree (occupation-level entry)"}
++            :living-wage-band "Above"}   ;; $99,602 vs BR $45,496
++   :careers {:roles [{:title "Industrial Engineering Technologist/Technician" :soc "17-3026.00"
++                      :desc "Supports industrial engineers by testing products, analyzing quality data, and improving production processes."}]}
++   :time-to-credential
++   {:designed "~2 years full-time"
++    :actual "≈4.6 years"
++    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
++
++;; --- Colleges tab · transfer associate: BRCC Business (Louisiana Transfer) ----
++(def business-transfer
++  {:id "business-transfer" :school :brcc :type :transfer
++   :name "Business (Louisiana Transfer)" :acronym nil
++   :track "Business/Commerce, General" :credential-level "Associate's (transfer-designed)"
++   :cip "52.0101" :field "Business"
++   :completions {:per-year 56 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 52.0101 Associate, BRCC)
++   :sections [:overview :transfer-plan :time-to-credential]
++   :overview
++   {:credential-line
++    (str "A transfer-designed associate built to move toward a Business Administration "
++         "bachelor's — you complete the first two years at community-college cost, then "
++         "transfer to a 4-year.")
++    :student-connection nil :caveat nil
++    :day-to-day nil}
++   :transfer-plan
++   {:destination "Business Administration (BS)"
++    :framing "2 + 2: finish the associate at BRCC, then transfer toward the bachelor's."
++    ;; Louisiana statewide transfer-degree guarantee (LCTCS / BOR) — real statewide policy.
++    :la-guarantee "Louisiana's statewide transfer degree (AALT/ASLT) guarantees your lower-division general-education credits transfer to any Louisiana public university."
++    ;; Transfer→bachelor's COMPLETION outcomes are intentionally NOT shown: a school-specific
++    ;; figure for BRCC isn't in the repo (national NSC numbers aren't true for this school).
++    ;; To surface this, add a per-UNITID transfer-outcomes file (CCRC Tracking Transfer
++    ;; institutional data / NSC StudentTracker) and the :outcomes render lights up. Acquisition.
++    :articulation-note "Course articulation, credit-applicability, and transfer-completion rates aren't in the repo yet — your advisor maps them (BOR Statewide Articulation; CCRC/NSC transfer outcomes)."
++    :cost-note "BRCC tuition now (~$3,237/yr); the bachelor's portion continues at a 4-year — full cost-to-degree depends on the destination you choose."
++    :destination-careers
++    [{:title "General & Operations Managers" :soc "11-1021.00" :median 101556 :stars 5
++      :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}})
++
++;; --- Short-Term tab · certificate: BRCC LPN -----------------------------------
++(def lpn
++  {:id "lpn" :type :certificate :provider "Baton Rouge Community College"
++   :name "Licensed Practical/Vocational Nurse" :acronym "LPN"
++   :credential-level "Certificate (1–2 years)" :location "Baton Rouge, LA"
++   :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
++   :lwc-stars 4
++   :info-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; program_url
++   :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)
++   :sections [:overview :salary :careers :time-to-credential :funding]
++   :overview
++   {:credential-line
++    (str "A 1–2-year certificate that qualifies you to sit for the NCLEX-PN and work as a "
++         "Licensed Practical Nurse — the fastest licensed-nursing entry point.")
++    :student-connection
++    "A quick, lower-cost way into hands-on patient care — and credits can later build toward an RN."
++    :day-to-day
++    ["Observe patients and chart and report changes such as adverse reactions to medication or treatment."
++     "Measure and record vital signs — height, weight, temperature, blood pressure, pulse, respiration."
++     "Administer prescribed medications or start IV fluids, noting times and amounts on patients' charts."]}
++   :licensure-exam {:name "NCLEX-PN" :url "https://www.nclex.com/"
++                    :note "the licensing exam for practical nurses (pass rate not in repo — advisor verify)"}
++   :salary {:occupation {:soc-title "Licensed Practical & Licensed Vocational Nurses" :soc "29-2061"
++                         :median 49997 :stars 4 :growth-pct "+7.48%" :openings "16,532"
++                         :education "Postsecondary non-degree award"}
++            :living-wage-band "Near"}    ;; $49,997 vs BR $45,496 = +9.9% → Near
++   :careers {:roles [{:title "Licensed Practical Nurse (LPN)" :soc "29-2061.00"
++                      :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}
++   :funding {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
++             :pell 7395 :tops "TOPS-Tech eligible" :commuter? true}})
++
++;; --- Short-Term tab · apprenticeship: Electrical (Baton Rouge Electrical JATC) -
++(def electrical-apprenticeship
++  {:id "electrical-appr" :type :apprenticeship :provider "Baton Rouge Electrical JATC"
++   :name "Electrical Apprenticeship" :location "Baton Rouge, LA"
++   :field "Electrical" :primary-soc "47-2111"     ;; CIP 99.0 (unmapped) → SOC from the trade
++   :credential-level "Registered Apprenticeship" :lwc-stars 5
++   ;; Verified BR Electrical JATC page (the data field's slug pointed to Alexandria).
++   :info-url "https://apprenticeshipla.com/apprenticeships/baton-rouge-electrical-jatc/"
++   ;; Apprenticeship wage progression IS in louisiana_programs for this JATC.
++   :wage-progression {:start "$17.74/hr" :average "$28.16/hr"}
++   :sections [:overview :salary :careers :earn]
++   :overview
++   {:credential-line
++    (str "A registered apprenticeship: you're paid to work alongside licensed electricians "
++         "while you train — earn while you learn, no tuition debt.")
++    :student-connection nil
++    :day-to-day
++    ["Read blueprints and sketches to plan the layout of wiring and equipment to code."
++     "Install conduit and pull insulated wiring through walls and concealed spaces."
++     "Install, maintain, and repair electrical systems from ladders, scaffolds, and roofs."]}
++   :salary {:occupation {:soc-title "Electricians" :soc "47-2111"
++                         :median 59259 :stars 5 :growth-pct "+11.7%" :openings "12,294"
++                         :education "High school diploma or equivalent (train on the job)"}
++            :living-wage-band "Above"}   ;; $59,259 vs BR $45,496 = +30%
++   :careers {:roles [{:title "Electrician" :soc "47-2111.00"
++                      :desc "Installs, maintains, and repairs electrical systems in homes, businesses, and industrial sites."}]}
++   :earn-while-learn? true
++   ;; Wage progression, duration, and journey credential not in repo (DOL Apprenticeship.gov — advisor verify).
++   })
++
++;; --- Scholarships tab · one real row (career_onestop, LA-eligible, healthcare) -
++;; In production the "why it fits" + tips come from the DSPy 5-phase pipeline
++;; (ExplainScholarshipMatch); here they're a grounded match note over the real row.
++(def jane-delano-scholarship
++  {:id "jane-delano" :type :scholarship
++   :name "Jane Delano Student Nurse Scholarships"
++   :sponsor "American National Red Cross"
++   :award "$3,000"
++   :deadline "November 4"
++   :target-levels "Bachelor, Master"
++   :url "http://www.redcross.org"
++   :eligibility "Red Cross volunteer or employee within the past 5 years; at least one year of college credits completed; currently enrolled in an accredited U.S. nursing program."
++   :selection "Selection by the scholarship committee; preference to student-nurse volunteers."
++   :why-fits "Matches your nursing pathway and healthcare interest — it's a nursing-specific award open to BSN students. Plan ahead: it expects Red Cross volunteer/employee experience and at least a year of college, so line up volunteering now."
++   :tips ["Start (or log) Red Cross volunteer hours before you apply."
++          "Apply once you've completed your first year in an accredited nursing program."
++          "Lead with your patient-care and community-service experience."]})
++
++(def career-mobility-scholarship
++  {:id "career-mobility" :type :scholarship
++   :name "Career Mobility Scholarships"
++   :sponsor "Foundation of the National Student Nurses Association"
++   :award "$1,000–$7,500"
++   :deadline "January 24"
++   :target-levels "Associate, Bachelor, Master"
++   :url "http://www.forevernursing.org"
++   :eligibility "Enrolled in a state-approved nursing program leading to an associate, baccalaureate, diploma, or direct-entry master's — or an RN-to-BSN completion program."
++   :selection "Based on academic achievement, financial need, and involvement in nursing student organizations and community health activities."
++   :why-fits "Works for any nursing route you choose — it explicitly covers associate-degree nursing, so it fits whether you start with the ADN or go straight to the BSN."
++   :tips ["Note your financial need and any nursing-club or community-health involvement."
++          "You're eligible once you're enrolled and matriculated in an approved nursing program."]})
++
++(def flight-away-scholarship
++  {:id "flight-away" :type :scholarship
++   :name "A Flight Away"
++   :sponsor "A Leap Ahead Foundation"
++   :award "$2,000"
++   :deadline "October 31"
++   :target-levels "Associate, Bachelor, Master, Professional"
++   :url "https://aleapaheadfoundation.org/"
++   :eligibility "U.S. residents, 18+, enrolled or pursuing enrollment at a U.S. university in an associate, bachelor's, master's, or professional program."
++   :selection "Evaluated on an essay response."
++   :why-fits "A broad, no-GPA award open to any major and any level — a good catch-all to apply for alongside the nursing-specific scholarships."
++   :tips ["Open to any field — apply regardless of your major."
++          "It's decided on an essay, so put real effort into a strong personal statement."]})
++
++;; --- Tab registry -------------------------------------------------------------
++;; Colleges = schools (each with pathways). Short-Term = standalone programs.
++;; Scholarships = scholarship cards.
++(def colleges-schools [school brcc])
++(def college-pathways {"160612" pathways                       ;; SLU
++                       "437103" [adn industrial business-transfer]})  ;; BRCC
++(def short-term-programs [lpn electrical-apprenticeship])
++(def scholarship-list [jane-delano-scholarship career-mobility-scholarship flight-away-scholarship])
 diff --git a/ui/advising-hub/src/components/rec_demo/interface.cljs b/ui/advising-hub/src/components/rec_demo/interface.cljs
 new file mode 100644
 index 0000000..bb144b3

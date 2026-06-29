@@ -1,7 +1,11 @@
 # Integrating the prototype into bryc-workshop
 
+> **📋 v3 handoff:** read **[`V3_SPEC_AND_SOURCING.md`](./V3_SPEC_AND_SOURCING.md)** first — it has
+> the full as-built field-by-field sourcing, the data files added to the repo (+ iCloud link),
+> and the acquisition items. This file is just the apply steps.
+
 Forking and direct pushes are disabled on `ObneyAI/bryc-workshop`, so this prototype
-is delivered as a patch (v2). From a clean `bryc-workshop` checkout (default branch):
+is delivered as a patch (v3). From a clean `bryc-workshop` checkout (default branch):
 
 ```bash
 git checkout -b prototype/rec-ui-redesign
