@@ -368,41 +368,53 @@
 
 (defui costs-section
   "School-anchored 'What It Costs You' — INSTITUTION-AGNOSTIC waterfall. Reads generic
-   cost-of-attendance keys (:tuition-fees, :living/:living-label, :books, :coa, :tops/
-   :tops-name, :pell, :net, :aid-covered, optional :avg-debt, :commuter?) so a residential
-   4-year and a commuter 2-year render the same COA → after-TOPS → net-after-Pell chart.
-   The axis scales to the school's COA and the copy adapts to commuter vs. residential."
+   cost-of-attendance keys (:tuition-fees, OPTIONAL :living/:living-label, :books, :coa,
+   :tops/:tops-name, :pell, :net, :aid-covered, optional :avg-debt, :commuter?,
+   :fully-covered?). A residential school includes :living (on-campus room & board — a real
+   charge); a COMMUTER school OMITS :living so the COA shows school-charged DIRECT costs only
+   (tuition, fees, books). When aid ≥ COA the net is $0 and the copy says so. Axis scales to COA."
   [{:keys [school]}]
   (let [c (:costs school)
         usd (fn [n] (str "$" (.toLocaleString n "en-US")))
-        living (or (:living c) (:room-board-on c))
+        living (or (:living c) (:room-board-on c))   ;; nil for commuter schools (no living in COA)
         living-label (or (:living-label c) "Room & board")
         coa (:coa c)
-        after-tops (- coa (:tops c))
+        after-tops (max 0 (- coa (:tops c)))
+        net (:net c)
         y-max (js/Math.ceil (* 1.12 coa))
         direct (+ (:tuition-fees c) (:books c))   ;; tuition+fees+books = school-charged direct cost
-        commuter? (:commuter? c)]
+        fully-covered? (or (:fully-covered? c) (<= net 0))
+        cost-words (if living
+                     (if (:commuter? c) "tuition, fees, books, and living costs" "tuition, fees, housing, and books")
+                     "tuition, fees, and books")]
     ($ :div {:class "space-y-4"}
        ($ charts/financial-aid-waterfall
           {:title "Your Estimated Annual Cost — After Financial Aid"
-           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + " living-label " " (usd living) " + Books " (usd (:books c)))}
+           :legend-items [{:color charts/color-earnings
+                           :label (str "Tuition & fees " (usd (:tuition-fees c))
+                                       (when living (str " + " living-label " " (usd living)))
+                                       " + Books " (usd (:books c)))}
                           {:color charts/color-net :label (str "Your estimated net cost after " (:tops-name c) " + Pell")}]
            :y-max y-max
-           :data [{:name "Total Cost\nof Attendance" :value coa :label (usd coa) :fill charts/color-earnings}
+           :data [{:name (if living "Total Cost\nof Attendance" "Tuition, Fees\n& Books")
+                   :value coa :label (usd coa) :fill charts/color-earnings}
                   {:name (str "After\n" (:tops-name c)) :value after-tops :label (usd after-tops) :fill charts/color-earnings}
-                  {:name "Your Net Cost\n(after Pell)" :value (:net c) :label (usd (:net c)) :fill charts/color-net}]})
+                  {:name "Your Net Cost\n(after Pell)" :value net :label (usd net) :fill charts/color-net}]})
        ($ bullet-list
           {:bullets
-           [(str "The full cost to attend for one year is about " (usd coa) " — "
-                 (if commuter? "tuition, fees, books, and living costs." "tuition, fees, housing, and books."))
-            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that"
-                 (when (>= (:aid-covered c) direct)
-                   (str " — together they more than cover tuition, fees, and books (" (usd direct) ")"))
-                 ".")
-            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year"
-                 (when (and commuter? (>= (:aid-covered c) direct))
-                   " — mostly living costs, since aid covers your tuition and fees")
-                 ".")
+           [(if living
+              (str "The full cost to attend for one year is about " (usd coa) " — " cost-words ".")
+              (str "Tuition, fees, and books for one year come to about " (usd coa) "."))
+            (if fully-covered?
+              (str (:tops-name c) " plus the Pell Grant cover all of it — together they fully cover your "
+                   "tuition, fees, and books, with Pell typically left over to help with other expenses.")
+              (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that"
+                   (when (>= (:aid-covered c) direct)
+                     (str " — together they more than cover tuition, fees, and books (" (usd direct) ")"))
+                   "."))
+            (if fully-covered?
+              "That leaves an estimated $0 out of pocket for tuition, fees, and books."
+              (str "That leaves an estimated net cost of about " (usd net) " for the year."))
             (when (:avg-debt c)
               (str "Average student debt at graduation is about " (usd (:avg-debt c)) "."))]})
        ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}

@@ -52,7 +52,7 @@ per-school datasets used for SLU, so any recommended 2-year populates the same w
 | 2 | **PSEO-first made explicit** | Precedence is **PSEO whenever present, LWC only as fallback**; BRCC has no PSEO row → LWC occupation wage | code + PSEO scan (BRCC absent) |
 | 3 | **Graduation rate, sector-normed** | **31%** (3-yr / 150%-time) vs **LA public 2-yr avg 30.3%** → **+0.7 → "Medium"** | **GR** `gr2024` 2-yr cohort: 299 completers ÷ 964 (GRTYPE 30/29); peers {BRCC 31.0, River Parishes 29.6} |
 | 4 | **Transfer data in About This School** | **17%** transfer-out (≈167 of 964, within 3 yrs) | **GR** `gr2024` transfer-out (GRTYPE 35 / CHRTSTAT 22) |
-| 5 | **Full cost waterfall** (parity w/ 4-yr) | COA **$15,651** → after TOPS-Tech **$12,565** → net **$5,170** (after Pell) | BORFEE T&F $4,419 + off-campus living $9,932 + books $1,300; TOPS-Tech $3,086; Pell $7,395 |
+| 5 | **Cost waterfall** (parity w/ 4-yr) | direct costs **$5,719** → after TOPS-Tech **$2,633** → **$0 out of pocket** (after Pell) | BORFEE T&F $4,419 + books $1,300; TOPS-Tech $3,086; Pell $7,395. **Off-campus living EXCLUDED** (an allowance, not a school charge) → aid ($10,481) covers all direct costs |
 | 6 | **Enrollment + retention** | UG **11,182**, **Black/AfAm 56.9%** (6,359), **retention 53%** | **EF** `ef2024a` (`EFTOTLT`/`EFBKAAT`); `ef2024d` `RET_PCF` |
 | 7 | **Transfer associate now shows TIME** | Business (LA Transfer) shows school-wide **≈4.6 yr** alongside its **56** completers | **TTD** institution-level (applies to the transfer associate too) |
 | 8 | **Avg debt OMITTED for 2-yr** | no bullet — Scorecard per-borrower ($5,204) reads misleadingly low; no in-repo cumulative figure | acquisition (IPEDS cumulative debt for 2-yrs) |
@@ -151,8 +151,8 @@ Rendered ONCE per school by the **same** components as the 4-year. Mirrors the 4
 | First-year retention (53%) | **EF** `ef2024d` `RET_PCF` |
 | Setting / open-admission / commuter narrative | PROG `sector`, `distance_from_baton_rouge_miles=0`; open-admission from missing ACT |
 | **Tuition & fees $4,419** (resident) | **BORFEE** `SummaryUGrad` — replaces Scorecard tuition-only $3,237 |
-| Living (off-campus) $9,932 · books $1,300 → **COA $15,651** | PROG `room_board_off_campus_annual` (commuter living allowance), `books_supplies_annual`; COA computed |
-| **TOPS-Tech −$3,086** · Pell −$7,395 → **net $5,170** | **BORFEE** TOPS column; Pell = `pell-grant-amount-per-semester`×2; net computed (COA − TOPS − Pell) |
+| Books $1,300 → **direct cost $5,719** (tuition + fees + books) | PROG `books_supplies_annual`. **Off-campus living EXCLUDED** — a commuter allowance, not a school charge (per advisor direction); COA shows school-charged direct costs only |
+| **TOPS-Tech −$3,086** · Pell −$7,395 → **net $0 out of pocket** | **BORFEE** TOPS column; Pell = `pell-grant-amount-per-semester`×2; aid ($10,481) exceeds direct costs → net capped at $0 |
 | Avg debt | **OMITTED** (no sound in-repo cumulative figure; Scorecard per-borrower $5,204 misleads) — acquisition |
 | NPC / FAFSA links | PROG `net-price-calculator-url` (mybrcc.edu); studentaid.gov |
 
@@ -224,7 +224,7 @@ All under `components/recommendations/resources/recommendations/`.
 - **School-anchored About + Cost are one data-driven path** *(v3.1)* — the SAME `about-school-section` / `costs-section` render 4-year and 2-year; what shows is driven by the fields the school record carries (acceptance/ACT when selective; transfer-out + open-admission copy otherwise). No school-type branch.
 - **Grad-rate norm is sector-aware, per-school** *(v3.1)* — each school carries its own `:grad-rate {rate, normed-against, peer-average, delta, indicator}`. Mechanism = IPEDS rate vs mean of **same-sector** LA public peers (4-yr: size-banded; 2-yr: statewide). High ≥+5 / Low ≤−5 / Med.
 - **Transfer-out** *(v3.1)* — `:transfer-out` (IPEDS GR) renders in About This School when present (community colleges); omitted otherwise.
-- **Cost waterfall is generic** *(v3.1)* — reads `:tuition-fees` / `:living`+`:living-label` / `:books` / `:coa` / `:tops`+`:tops-name` / `:pell` / `:net` / optional `:avg-debt` / `:commuter?`; axis scales to COA; copy adapts to commuter vs residential. Same chart for both school types.
+- **Cost waterfall is generic** *(v3.1)* — reads `:tuition-fees` / **optional** `:living`+`:living-label` / `:books` / `:coa` / `:tops`+`:tops-name` / `:pell` / `:net` / optional `:avg-debt` / `:commuter?` / `:fully-covered?`; axis scales to COA. A residential school includes `:living` (on-campus room & board, a real charge); a **commuter school omits `:living`** so the COA is school-charged direct costs only. When aid ≥ COA the net shows **$0 out of pocket**. Same chart for both school types.
 - **Chips** — derived per-program from `:field` (CIP title), `:credential-level` (award level), `:lwc-stars` (≥4 → "High demand").
 - **Logos** — curated asset OR domain favicon (any school).
 - **STR / Open Admission** — classifier on ACT vs 25/75; no ACT → "Open Admission".

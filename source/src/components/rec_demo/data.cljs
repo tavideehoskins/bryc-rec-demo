@@ -378,18 +378,19 @@
    :enrollment-group-pct "56.9%"
    :retention "53%"                    ;; ef2024d RET_PCF
 
-   ;; --- What It Costs You — FULL waterfall, sourced from BOR/IPEDS (parity w/ 4-year) ---
-   ;; Tuition & fees now come from BOR FY26 (authoritative, tuition+fees) — NOT Scorecard
-   ;; tuition-only. Commuter school: living = off-campus allowance (IPEDS), no on-campus
-   ;; room/board. TOPS-Tech + Pell cover all direct costs; net is mostly living costs.
+   ;; --- What It Costs You — waterfall, sourced from BOR/IPEDS (parity w/ 4-year) ---
+   ;; Tuition & fees from BOR FY26 (authoritative, tuition+fees) — NOT Scorecard tuition-only.
+   ;; Commuter school: OFF-CAMPUS LIVING IS EXCLUDED (an allowance, not a school charge), so
+   ;; the COA shows school-charged DIRECT costs only (tuition, fees, books). TOPS-Tech + Pell
+   ;; ($10,481) exceed those direct costs → estimated $0 out of pocket (:fully-covered?).
    :costs {:tuition-fees 4419 :tuition-fees-source "BOR FY26 (resident, tuition & fees)"
-           :living 9932 :living-label "Living (off-campus)"   ;; IPEDS off-campus room/board allowance
            :books 1300                                         ;; IPEDS/Scorecard books & supplies
-           :coa 15651                                          ;; 4419 + 9932 + 1300
+           :coa 5719                                           ;; 4419 + 1300 (no living/room-board)
            :tops 3086 :tops-name "TOPS-Tech"                   ;; BOR FY26 TOPS column
            :pell 7395                                          ;; pell-per-sem 3697.5 × 2
-           :net 5170                                           ;; 15651 − 3086 − 7395
-           :aid-covered 10481                                  ;; coa − net (TOPS-Tech + Pell)
+           :net 0                                              ;; aid ($10,481) > direct costs → $0 out of pocket
+           :aid-covered 5719                                   ;; aid covers all direct costs (capped at COA)
+           :fully-covered? true                                ;; aid ≥ COA → "$0 direct cost" framing
            ;; Average debt at graduation intentionally OMITTED: the only in-repo figure is the
            ;; Scorecard per-borrower loan-average ($5,204), which reads misleadingly low and isn't
            ;; the cumulative "debt at graduation" used for the 4-year. Acquisition: IPEDS cumulative
