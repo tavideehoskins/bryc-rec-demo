@@ -12,7 +12,8 @@
 
    Both previously-flagged items now follow the plan exactly:
      • SECTION DISPLAY ORDER — Build Plan §3 order, in `section-order`.
-     • 4-YR GRAD-RATE NORMING — spec bands/thresholds, computed in `grad-rate-norm`."
+     • GRAD-RATE NORMING — sector-aware, carried per-school under each record's :grad-rate
+       (see the norming note below); renders identically for 4-year and 2-year schools."
   ;; Pure data namespace — no presentation deps; the components assemble all display
   ;; strings (chart names, legends, copy) from these fields.
   )
@@ -103,26 +104,23 @@
     :else                    {:key "reach"  :label "Reach"  :color "#c92a4a"}))
 
 ;; ----------------------------------------------------------------------------
-;; 4-year grad-rate norming — Obney spec bands/thresholds, COMPUTED exactly.
-;; Method: gr2024 bachelor's cohort (GRTYPE 8 adjusted cohort, GRTYPE 13 = completers
-;; within 100% normal time) ÷ → 4-yr rate; UG enrollment via ef2024a (EFALEVEL=2,
-;; LINE=99) sets the size band; band average is the mean 4-yr rate across LA public
-;; 4-years (bor_ipeds_bridge) in the SAME band. Indicator: High ≥ +5 pts vs band
-;; avg · Low ≤ −5 · Medium otherwise.
-;;   SLU 4-yr 26.3% · band 10,000–20,000 {ULL 26.9, SLU 26.3, LA Tech 44.5} avg 32.6%
-;;   → 26.3 − 32.6 = −6.3 pts → Low.
+;; GRAD-RATE NORMING — sector-aware and INSTITUTION-AGNOSTIC. The norm now lives on
+;; each school record under :grad-rate, so every recommended school (4-year OR 2-year)
+;; carries its own sourced rate + peer comparison; the component renders whatever is
+;; present (no per-school branch). The mechanism is identical for any institution:
+;;
+;;   rate  = IPEDS gr2024 completers-within-150%-of-normal-time ÷ adjusted cohort
+;;           (4-year cohort GRTYPE 8/13 → 4-yr rate; 2-year cohort GRTYPE 29/30 → 3-yr rate)
+;;   peers = mean rate across SAME-SECTOR Louisiana public institutions
+;;           (4-year: size-banded by ef2024a UG enrollment; 2-year: statewide)
+;;   indicator = High ≥ +5 pts vs peer avg · Low ≤ −5 · Medium otherwise
+;;
+;; Worked values (see each school's :grad-rate):
+;;   SLU  26.3% · band 10,000–20,000 {ULL 26.9, SLU 26.3, LA Tech 44.5} avg 32.6% → −6.3 → Low
+;;   BRCC 31.0% (299/964) · LA public 2-yr {BRCC 31.0, River Parishes 29.6} avg 30.3% → +0.7 → Medium
+;; CAVEAT (acquisition): the in-repo LA roster resolves only 2 public 2-years; completing
+;; the LCTCS roster (bor_ipeds_bridge or IPEDS HD directory) widens the 2-year peer set.
 ;; ----------------------------------------------------------------------------
-
-(def grad-rate-norm
-  {:status :final
-   :size-bands ["<5,000" "5,000–10,000" "10,000–20,000" ">20,000"]
-   :slu-band "10,000–20,000"           ;; SLU UG enrollment 13,192
-   :slu-rate 26.3
-   :band-average 32.6
-   :band-members 3
-   :delta -6.3
-   :indicator "Low"                    ;; ≤ −5 pts vs band average
-   :threshold "High ≥ +5 pts vs band avg · Low ≤ −5 pts · Medium otherwise"})
 
 ;; ----------------------------------------------------------------------------
 ;; Per-pathway SECTION DISPLAY ORDER — Build Plan §3 order (1–4). Sections 5 & 6
@@ -160,7 +158,15 @@
    :acceptance "99%"                 ;; acceptance_rate 0.9898 (was mislabeled 94% in v1)
 
    ;; --- About This School: 3-figure callout (Build Plan §3.5) ---
-   :grad-rate-4yr "26%"              ;; gr2024 · 100%-time bachelor's completers · UNITID 160612 (26.3%)
+   ;; Grad-rate norm carried on the school (sector-aware; see norming note above).
+   :grad-rate {:rate "26%" :rate-num 26.3
+               :label "4-Year Graduation Rate"
+               :normed-against "similar-size LA public 4-years"
+               :peer-average "32.6" :peer-n 3 :delta "−6.3" :indicator "Low"
+               :method (str "IPEDS gr2024 bachelor's 100%-time completers ÷ adjusted cohort (UNITID 160612 = 26.3%). "
+                            "Peer avg = mean 4-yr rate across LA public 4-years in the same UG-enrollment band "
+                            "(10,000–20,000: ULL 26.9, SLU 26.3, LA Tech 44.5 → 32.6). "
+                            "Indicator: High ≥ +5 pts · Low ≤ −5 · Medium otherwise.")}
    :enrollment-total 13192          ;; ef2024a EFTOTLT
    :enrollment-group-label "Black/African American"
    :enrollment-group-count 2586     ;; ef2024a EFBKAAT (≈19.6% of total)
@@ -173,6 +179,7 @@
    ;; --- What It Costs You (school-anchored; recomputed on BOR FY26) ---
    :costs {:tuition 5777 :fees 3266 :tuition-fees 9043      ;; BOR FY26 (replaces IPEDS $8,373)
            :room-board-on 10240 :room-board-off 11812
+           :living 10240 :living-label "Room & board"       ;; generic cost-of-attendance line (on-campus)
            :books 1300
            :coa 20583                                       ;; 9043 + 10240 + 1300
            :tops 5652 :tops-name "TOPS Opportunity"         ;; LOSFA OPH (current-year)
@@ -332,24 +339,63 @@
 ;; ============================================================================
 
 ;; --- Baton Rouge Community College (2-year / CTE home for the samples) --------
+;; BRCC is sourced to PARITY with the 4-year school — every field below comes from the
+;; same institution-agnostic datasets used for SLU (BOR FY26 fee detail, IPEDS gr2024 /
+;; ef2024a / ef2024d), so the SAME About/Cost components render any 2-year the same way.
 (def brcc
   {:unitid "437103"
    :name "Baton Rouge Community College"
    :short-name "BRCC"
    :type "Public 2-Year"
-   :kind :cte                          ;; suppresses STR badge / grad-norming / campus life
+   :kind :two-year                     ;; open-admission (no ACT) → "Open Admission" badge; commuter cost copy
    :city "Baton Rouge" :state "LA"
    :location "Baton Rouge, LA"
    :distance "In Baton Rouge"          ;; distance_from_baton_rouge_miles = 0
    :sector "Public, 2-year"
+   :setting "an open-admission community college with a commuter campus"
    :logo "assets/brcc-logo.jpg"        ;; official BRCC wordmark (Wikimedia)
    :website "https://www.mybrcc.edu"
    :website-label "mybrcc.edu"
-   ;; Minimal cost (per decision: 2-year = minimal). Scorecard tuition-only (flag);
-   ;; no room/board (commuter). Pell/TOPS-Tech per louisiana_programs + LOSFA.
-   :costs {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
-           :pell 7395 :tops "TOPS-Tech eligible"
-           :commuter? true}})
+
+   ;; --- About This School: 3-figure callout (grad rate · transfer-out · enrollment) ---
+   ;; Grad-rate norm — sector-aware, computed exactly like the 4-year (see norming note).
+   :grad-rate {:rate "31%" :rate-num 31.0
+               :label "Graduation Rate (3-yr)"
+               :normed-against "Louisiana public 2-year colleges"
+               :peer-average "30.3" :peer-n 2 :delta "+0.7" :indicator "Medium"
+               :method (str "IPEDS gr2024 2-year cohort: 299 completers within 150% of normal time (3 yrs) "
+                            "÷ 964 adjusted cohort (UNITID 437103 = 31.0%). Peer avg = mean across LA public "
+                            "2-year colleges {BRCC 31.0, River Parishes 29.6} = 30.3%. Indicator: High ≥ +5 pts "
+                            "· Low ≤ −5 · Medium otherwise. Acquisition: complete the LCTCS roster to widen the peer set.")}
+   ;; School-specific TRANSFER data — IPEDS gr2024 transfer-out (community-college mission).
+   :transfer-out {:rate "17%" :rate-num 17.3 :count 167 :cohort 964
+                  :timeframe "within 3 years"
+                  :sub "≈167 of 964 first-time students transfer to continue elsewhere (within 3 yrs)"
+                  :source "IPEDS Graduation Rates — transfer-out, 2024"}
+   :enrollment-total 11182             ;; ef2024a EFTOTLT (UG)
+   :enrollment-group-label "Black/African American"
+   :enrollment-group-count 6359        ;; ef2024a EFBKAAT
+   :enrollment-group-pct "56.9%"
+   :retention "53%"                    ;; ef2024d RET_PCF
+
+   ;; --- What It Costs You — FULL waterfall, sourced from BOR/IPEDS (parity w/ 4-year) ---
+   ;; Tuition & fees now come from BOR FY26 (authoritative, tuition+fees) — NOT Scorecard
+   ;; tuition-only. Commuter school: living = off-campus allowance (IPEDS), no on-campus
+   ;; room/board. TOPS-Tech + Pell cover all direct costs; net is mostly living costs.
+   :costs {:tuition-fees 4419 :tuition-fees-source "BOR FY26 (resident, tuition & fees)"
+           :living 9932 :living-label "Living (off-campus)"   ;; IPEDS off-campus room/board allowance
+           :books 1300                                         ;; IPEDS/Scorecard books & supplies
+           :coa 15651                                          ;; 4419 + 9932 + 1300
+           :tops 3086 :tops-name "TOPS-Tech"                   ;; BOR FY26 TOPS column
+           :pell 7395                                          ;; pell-per-sem 3697.5 × 2
+           :net 5170                                           ;; 15651 − 3086 − 7395
+           :aid-covered 10481                                  ;; coa − net (TOPS-Tech + Pell)
+           ;; Average debt at graduation intentionally OMITTED: the only in-repo figure is the
+           ;; Scorecard per-borrower loan-average ($5,204), which reads misleadingly low and isn't
+           ;; the cumulative "debt at graduation" used for the 4-year. Acquisition: IPEDS cumulative
+           ;; debt for 2-years. (Bullet renders only when :avg-debt exists.)
+           :commuter? true
+           :npc-url "https://www.mybrcc.edu/financial_aid/netpricecalc.php"}})
 
 ;; --- Colleges tab · 2-year AAS: BRCC Associate Degree Nursing (ADN) -----------
 (def adn
@@ -454,7 +500,14 @@
     :cost-note "BRCC tuition now (~$3,237/yr); the bachelor's portion continues at a 4-year — full cost-to-degree depends on the destination you choose."
     :destination-careers
     [{:title "General & Operations Managers" :soc "11-1021.00" :median 101556 :stars 5
-      :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}})
+      :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}
+   ;; School-level time-to-degree applies to the transfer associate too (it IS a BRCC
+   ;; associate) — same CMPLTTD institution figure as ADN/Industrial. Answers "why is
+   ;; there no time under Time & Completion": the time cards now render with the 56 completions.
+   :time-to-credential
+   {:designed "~2 years full-time"
+    :actual "≈4.6 years"
+    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
 
 ;; --- Short-Term tab · certificate: BRCC LPN -----------------------------------
 (def lpn
@@ -484,7 +537,7 @@
             :living-wage-band "Near"}    ;; $49,997 vs BR $45,496 = +9.9% → Near
    :careers {:roles [{:title "Licensed Practical Nurse (LPN)" :soc "29-2061.00"
                       :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}
-   :funding {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
+   :funding {:tuition 4419 :tuition-flag "BOR FY26, tuition & fees"   ;; BOR FY26 (was Scorecard tuition-only)
              :pell 7395 :tops "TOPS-Tech eligible" :commuter? true}})
 
 ;; --- Short-Term tab · apprenticeship: Electrical (Baton Rouge Electrical JATC) -

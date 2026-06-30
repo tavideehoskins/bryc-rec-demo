@@ -9,8 +9,9 @@ profile, or existing engine module — including every deviation from the origin
 profile. Nothing is guessed. If a field has no source it is omitted from the student view (no
 placeholder) and flagged on the advisor side.**
 
-All file references verified against the repo on **2026-06-29**. The prototype hardcodes values
-in `data.cljs`, but every field name mirrors its source, so production wiring is field→source.
+All file references verified against the repo on **2026-06-29**; the **2-year parity refresh**
+(§ "v3.1") verified **2026-06-30**. The prototype hardcodes values in `data.cljs`, but every field
+name mirrors its source, so production wiring is field→source.
 
 ---
 
@@ -34,6 +35,32 @@ in `data.cljs`, but every field name mirrors its source, so production wiring is
    - **Transfer→bachelor's completion is NOT shown** — no school-specific source in the repo
      (national NSC numbers aren't true for BRCC); kept as an acquisition item.
    - **Logos** are domain-derived (favicon) with curated overrides — consistently attainable for any school.
+
+---
+
+## v3.1 — 2-year (BRCC) brought to FULL parity with 4-year (2026-06-30)
+
+The first v3 cut gave 2-year/CTE schools a **minimal** About + simple cost (STR, grad-norm, campus
+life, and the cost waterfall were suppressed). Per advisor feedback, the 2-year **About This School**
+and **What It Costs You** are now sourced to the **same depth as the 4-year**, and the SAME components
+render both (no `cte?` branch). **Every value below is institution-agnostic** — pulled from the same
+per-school datasets used for SLU, so any recommended 2-year populates the same way.
+
+| # | Change | As built (BRCC, UNITID 437103) | Source |
+|---|---|---|---|
+| 1 | **Tuition now from BOR, not Scorecard** | Tuition & **fees $4,419** (resident) replaces Scorecard tuition-only $3,237 | **BORFEE** `SummaryUGrad` (calibrated: SLU col = known $9,043) |
+| 2 | **PSEO-first made explicit** | Precedence is **PSEO whenever present, LWC only as fallback**; BRCC has no PSEO row → LWC occupation wage | code + PSEO scan (BRCC absent) |
+| 3 | **Graduation rate, sector-normed** | **31%** (3-yr / 150%-time) vs **LA public 2-yr avg 30.3%** → **+0.7 → "Medium"** | **GR** `gr2024` 2-yr cohort: 299 completers ÷ 964 (GRTYPE 30/29); peers {BRCC 31.0, River Parishes 29.6} |
+| 4 | **Transfer data in About This School** | **17%** transfer-out (≈167 of 964, within 3 yrs) | **GR** `gr2024` transfer-out (GRTYPE 35 / CHRTSTAT 22) |
+| 5 | **Full cost waterfall** (parity w/ 4-yr) | COA **$15,651** → after TOPS-Tech **$12,565** → net **$5,170** (after Pell) | BORFEE T&F $4,419 + off-campus living $9,932 + books $1,300; TOPS-Tech $3,086; Pell $7,395 |
+| 6 | **Enrollment + retention** | UG **11,182**, **Black/AfAm 56.9%** (6,359), **retention 53%** | **EF** `ef2024a` (`EFTOTLT`/`EFBKAAT`); `ef2024d` `RET_PCF` |
+| 7 | **Transfer associate now shows TIME** | Business (LA Transfer) shows school-wide **≈4.6 yr** alongside its **56** completers | **TTD** institution-level (applies to the transfer associate too) |
+| 8 | **Avg debt OMITTED for 2-yr** | no bullet — Scorecard per-borrower ($5,204) reads misleadingly low; no in-repo cumulative figure | acquisition (IPEDS cumulative debt for 2-yrs) |
+
+**Grad-rate norm caveat (acquisition):** the in-repo LA roster (`PROG` + `BRIDGE`) resolves only **2**
+public 2-years (BRCC, River Parishes), so the "statewide 2-yr average" is thin. Completing the LCTCS
+roster (finish `bor_ipeds_bridge.csv`, or add the IPEDS HD directory for a LA-public-2-yr filter)
+widens the peer set; the mechanism is unchanged.
 
 ---
 
@@ -96,8 +123,8 @@ Files in `components/recommendations/resources/recommendations/`. **★ = added 
 | Time-to-credential (designed ~2 yr · typical ≈4.6 yr) | **TTD** — **institution-level** (BRCC FTIC-FT 4.635872; school-wide, NOT per-program) |
 | **Completers / year (program-specific)** | **CMPL** — awards by CIP, BRCC 2024 (ADN **131** · Industrial **29**) |
 | License (NCLEX-RN; pass rate omitted) | NOTION Addendum (pass rate = acquisition) |
-| Cost / funding (tuition $3,237, Pell, TOPS-Tech) | PROG `in-state-tuition`, `pell-grant-amount-per-semester`, `title-iv-status`; TOPS-Tech |
-| **Dropped (CTE):** STR/selectivity, grad-norming, campus life, PUMS | — |
+| Cost / funding | **school-anchored** — see "2-year School-anchored" table below (now a full BOR/IPEDS waterfall, not minimal) |
+| **Not shown (by data, not by type):** PUMS (non-bachelor's only) · campus life (no campus-life URL) | STR shows **"Open Admission"**; **grad-norm + transfer-out + cost waterfall ARE now shown** (see v3.1) |
 
 ## Colleges tab — Transfer Associate (BRCC Business, LA Transfer, CIP 52.0101)
 
@@ -107,8 +134,27 @@ Files in `components/recommendations/resources/recommendations/`. **★ = added 
 | **LA transfer guarantee (AALT/ASLT)** | LCTCS / BOR statewide transfer-degree policy |
 | Careers at the destination bachelor's | XWALK/ONET/LWC at the BS CIP (Gen & Ops Mgrs 11-1021, LWC $101,556) |
 | Completers / year (program-specific) | **CMPL** (CIP 52.0101, BRCC 2024 = **56**) |
+| **Time to credential (designed ~2 yr · typical ≈4.6 yr)** *(v3.1)* | **TTD** institution-level — the transfer associate IS a BRCC associate, so the same school-wide figure applies (renders with the 56 completers) |
 | Cost to bachelor's | PROG tuition (2-yr) + "continues at a 4-year" note (full cost depends on destination) |
-| **Articulation + transfer→bachelor's completion** | **acquisition** — BOR Statewide Articulation; CCRC/NSC (shown as advisor-mapped, not a number) |
+| **Articulation + transfer→bachelor's completion** | **acquisition** — BOR Statewide Articulation; CCRC/NSC (shown as advisor-mapped, not a number). NB: the school-level **transfer-OUT rate** (17%) IS shown in About This School (GR), distinct from transfer-*completion* |
+
+## Colleges tab — 2-year School-anchored: About This School + What It Costs You  *(v3.1; BRCC, UNITID 437103)*
+
+Rendered ONCE per school by the **same** components as the 4-year. Mirrors the 4-year sourcing exactly.
+
+| Field | Source (as built) |
+|---|---|
+| STR badge → **"Open Admission"** | no ACT in PROG → classifier returns Open Admission |
+| **Graduation rate 31% (3-yr) + norm "Medium"** | **GR** `gr2024` 2-yr cohort 299/964 (GRTYPE 30/29); peer avg = mean across LA public 2-yrs {BRCC 31.0, River Parishes 29.6} = 30.3% (+0.7); High ≥+5 / Low ≤−5 / Med |
+| **Transfer-out 17%** (≈167 of 964, within 3 yrs) | **GR** `gr2024` transfer-out (GRTYPE 35 / CHRTSTAT 22) ÷ adjusted cohort |
+| Enrollment, race-aware (Black 6,359 / 11,182 = 56.9%) | **EF** `ef2024a` (`EFALEVEL=2, LINE=99`: `EFTOTLT`/`EFBKAAT`) |
+| First-year retention (53%) | **EF** `ef2024d` `RET_PCF` |
+| Setting / open-admission / commuter narrative | PROG `sector`, `distance_from_baton_rouge_miles=0`; open-admission from missing ACT |
+| **Tuition & fees $4,419** (resident) | **BORFEE** `SummaryUGrad` — replaces Scorecard tuition-only $3,237 |
+| Living (off-campus) $9,932 · books $1,300 → **COA $15,651** | PROG `room_board_off_campus_annual` (commuter living allowance), `books_supplies_annual`; COA computed |
+| **TOPS-Tech −$3,086** · Pell −$7,395 → **net $5,170** | **BORFEE** TOPS column; Pell = `pell-grant-amount-per-semester`×2; net computed (COA − TOPS − Pell) |
+| Avg debt | **OMITTED** (no sound in-repo cumulative figure; Scorecard per-borrower $5,204 misleads) — acquisition |
+| NPC / FAFSA links | PROG `net-price-calculator-url` (mybrcc.edu); studentaid.gov |
 
 ## Short-Term tab — Certificate (BRCC LPN, CIP 51.3901)
 
@@ -156,8 +202,9 @@ All under `components/recommendations/resources/recommendations/`.
 | `CMPLTTD.xlsx` (+ `CMPLTTD (1).xlsx` baccalaureate) | time-to-degree (institution-level) |
 | `CMPLRACE.xlsx` | program completions by CIP (completers/year) |
 | `bor_ipeds_bridge.csv` | UNITID ↔ BOR code bridge (grad-rate norm) |
-| `ipeds_extracted/gr2024.csv` (from `gr2024.zip`) | IPEDS graduation rates |
+| `ipeds_extracted/gr2024.csv` (from `gr2024.zip`) | IPEDS graduation rates (4-yr & **2-yr cohorts**) + **transfer-out** |
 | `ipeds_extracted/ef2024a.csv` (from `ef2024a.zip`) | IPEDS enrollment by race |
+| `ipeds_extracted/ef2024d.csv` (from `ef2024d.zip`) | IPEDS first-year **retention** (`RET_PCF`) — SLU 71%, BRCC 53% |
 | `pseo_la (1).xlsx` | PSEO program-level earnings |
 | `ipums_acs_degfield_outcomes.csv` + `ipums_degfieldd_cip_crosswalk.csv` (+ `_reference.csv`) | PUMS "what degree-holders do" |
 | `TOPS OPH / TECH / Excellence Award Amounts.pdf` | LOSFA TOPS award amounts |
@@ -173,12 +220,15 @@ All under `components/recommendations/resources/recommendations/`.
 ## Transferability mechanisms (as built)
 
 - **Per-record `:sections`** — each program declares which sections render; falls back to the 4-year default. Add/remove by data, not code.
-- **Salary PSEO→LWC** — `:earnings` → PSEO chart; `:occupation` → LWC occupation-wage chart, labeled occupation-level.
+- **Salary is PSEO-FIRST** — `:earnings` (PSEO program-level) is used **whenever present**; the `:occupation` LWC occupation-wage chart is the **fallback only** when PSEO isn't published for that school×program (labeled occupation-level). Institution-agnostic precedence.
+- **School-anchored About + Cost are one data-driven path** *(v3.1)* — the SAME `about-school-section` / `costs-section` render 4-year and 2-year; what shows is driven by the fields the school record carries (acceptance/ACT when selective; transfer-out + open-admission copy otherwise). No school-type branch.
+- **Grad-rate norm is sector-aware, per-school** *(v3.1)* — each school carries its own `:grad-rate {rate, normed-against, peer-average, delta, indicator}`. Mechanism = IPEDS rate vs mean of **same-sector** LA public peers (4-yr: size-banded; 2-yr: statewide). High ≥+5 / Low ≤−5 / Med.
+- **Transfer-out** *(v3.1)* — `:transfer-out` (IPEDS GR) renders in About This School when present (community colleges); omitted otherwise.
+- **Cost waterfall is generic** *(v3.1)* — reads `:tuition-fees` / `:living`+`:living-label` / `:books` / `:coa` / `:tops`+`:tops-name` / `:pell` / `:net` / optional `:avg-debt` / `:commuter?`; axis scales to COA; copy adapts to commuter vs residential. Same chart for both school types.
 - **Chips** — derived per-program from `:field` (CIP title), `:credential-level` (award level), `:lwc-stars` (≥4 → "High demand").
 - **Logos** — curated asset OR domain favicon (any school).
 - **STR / Open Admission** — classifier on ACT vs 25/75; no ACT → "Open Admission".
-- **CTE suppression** — 2-year drops STR, grad-norm, campus life; minimal About + simple cost.
-- **Conditional fields** — every discipline-specific field omitted when `nil`.
+- **Conditional fields** — every discipline-specific field omitted when `nil` (e.g. avg-debt for 2-yrs, PUMS below a bachelor's).
 
 ---
 
@@ -188,7 +238,9 @@ Omitted from the student view, flagged on the advisor side.
 
 | Missing field | Tier(s) | Authoritative source |
 |---|---|---|
-| **Transfer→bachelor's completion, school-specific** | Transfer Associate | CCRC *Tracking Transfer* institutional data / NSC StudentTracker (national NSC exists but is **not** school-specific — not shown) |
+| **Transfer→bachelor's *completion*, school-specific** | Transfer Associate | CCRC *Tracking Transfer* / NSC StudentTracker (national NSC is **not** school-specific — not shown). NB transfer-*out* rate (17%) **is** shown from IPEDS GR. |
+| **Complete LA public 2-year roster** (for the grad-rate norm) *(v3.1)* | 2-year norm | finish `bor_ipeds_bridge.csv` UNITID mapping, or add IPEDS HD directory (filter LA + public + 2-yr). In-repo roster currently resolves only 2 colleges. |
+| **Cumulative debt at graduation, 2-year** *(v3.1)* | 2-year cost | IPEDS / College Scorecard institution cumulative debt (Scorecard per-borrower loan-average is misleadingly low — debt bullet omitted for 2-yrs) |
 | **Program-level time-to-degree** | All associate/cert | BOR SSPS unit-record / institution IR (CMPLTTD is institution-level only) |
 | Licensure / cert pass rates (beyond NCLEX-RN) | AAS, Certificate | State boards (LA State Board of Nursing, Cosmetology, Contractors, AWS, OMV) |
 | Program approval-for-licensure flag | AAS, Certificate | Same state boards |
@@ -208,8 +260,8 @@ Omitted from the student view, flagged on the advisor side.
 2. **Earnings chart degrades** — full Y1/Y5/Y10 only where PSEO has it; otherwise the **LWC occupation-wage** chart, labeled occupation-level (BRCC samples).
 3. **Cost helper** ("school hasn't published pricing — contact them") is retained for unreported short-term tuition — content, not a placeholder.
 4. **PUMS** never appears below a bachelor's.
-5. **Suppress for CTE:** ACT/selectivity (S/T/R → "Open Admission"), grad-rate norming, residential campus life.
-6. **Time vs completions** — time-to-degree is school-wide (CMPLTTD); completers/year is program-specific (CMPLRACE); each is labeled with its scope.
+5. **2-year ≠ suppressed** *(v3.1)* — 2-year schools get the SAME About + Cost depth as 4-year: STR → "Open Admission", but the **grad-rate norm (sector-aware), transfer-out, enrollment/retention, and the full cost waterfall ARE shown**. Only residential **campus life** (no URL) and **PUMS** (non-bachelor's) are absent — by data, not by school type.
+6. **Time vs completions** — time-to-degree is school-wide (CMPLTTD; applies to the transfer associate too); completers/year is program-specific (CMPLRACE); each is labeled with its scope.
 7. **Advisor side keeps every gap visible** (`[DATA NOT FOUND — Advisor Verify]` in the Notion draft + Advisor Review Notes) so omission is never silently lossy.
 
 ---

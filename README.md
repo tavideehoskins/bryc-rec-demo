@@ -14,6 +14,11 @@ source** (PSEO/BOR/IPEDS/LWC/O*NET/IPUMS + Career-OneStop scholarships) — no b
 calls. Static build of the standalone `rec-demo` page from the `bryc-workshop` ClojureScript app
 (UIx + shadcn/ui + Tailwind v4, Recharts).
 
+**v3.1** brings the 2-year college (BRCC) to **full parity** with the 4-year: BOR-sourced tuition,
+a sector-normed graduation rate, IPEDS transfer-out, enrollment/retention, and a complete cost
+waterfall — all rendered by the *same* data-driven components, so any recommended institution
+populates the same way. See the "v3.1" section of the sourcing spec.
+
 ## Source & integration
 - **`integration/V3_SPEC_AND_SOURCING.md`** — as-built field-by-field sourcing, data files added to the repo (+ iCloud link), acquisition items, and integration notes (**start here**).
 - `source/` — the prototype ClojureScript source, for browsing.

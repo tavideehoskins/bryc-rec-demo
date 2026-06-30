@@ -13,8 +13,9 @@
 
    All content is hardcoded (components.rec-demo.data). Every discipline-specific
    field is conditional so the same components generalize to any bachelor's
-   pathway. Section display order and grad-rate norming both follow the plan
-   exactly (see data.cljs `section-order` and `grad-rate-norm`)."
+   pathway. Section display order follows the plan exactly (data.cljs `section-order`);
+   grad-rate norming is sector-aware and carried per-school (each record's :grad-rate),
+   so About This School + What It Costs You render identically for 4-year and 2-year schools."
   (:require [uix.core :as uix :refer [defui $ use-state]]
             [clojure.string :as str]
             [components.rec-demo.data :as data]
@@ -138,8 +139,11 @@
   (cond (>= stars 4) "High demand" (= stars 3) "Steady demand" :else "Some demand"))
 
 (defui salary-section
-  "Two modes: PSEO program-earnings chart when :earnings is present (e.g. SLU BSN);
-   otherwise an LWC occupation-wage view, clearly labeled (CTE programs with no PSEO)."
+  "Earnings source precedence is PSEO-FIRST, always: program-level PSEO earnings are
+   used whenever present (:earnings, e.g. SLU BSN). The LWC occupation-wage view is the
+   FALLBACK only when PSEO isn't published for this school × program (e.g. BRCC, which is
+   not in the PSEO file) — and it's clearly labeled as occupation-level. This precedence
+   is institution-agnostic: any school with PSEO data shows PSEO; any without falls back."
   [{:keys [pathway school]}]
   (let [s (:salary pathway)
         area (or (:living-wage-area school) data/home-metro)
@@ -294,58 +298,113 @@
           (:label indicator)))
      (when sub ($ :div {:class "text-xs text-[#676868] mt-1 leading-snug"} sub))))
 
-(defui about-school-section [{:keys [school student]}]
-  (let [cls (data/classify-str (:act student) (:act-25 school) (:act-75 school))
-        gnorm data/grad-rate-norm
-        gcolor (case (:indicator gnorm) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
+(defui about-school-section
+  "School-anchored 'About This School' — INSTITUTION-AGNOSTIC. The 3-figure callout and
+   the narrative bullets are assembled from whatever the school record carries, so a
+   selective 4-year (acceptance + ACT/STR) and an open-admission 2-year (grad rate +
+   transfer-out) render through the same code with no per-school branch."
+  [{:keys [school student]}]
+  (let [selective? (some? (:act-25 school))
+        cls (when selective? (data/classify-str (:act student) (:act-25 school) (:act-75 school)))
+        gr (:grad-rate school)
+        gcolor (case (:indicator gr) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
+        to (:transfer-out school)
         total (.toLocaleString (:enrollment-total school) "en-US")
-        enroll-fig (if (:minority? student)
+        enroll-fig (if (and (:minority? student) (:enrollment-group-pct school))
                      {:value (:enrollment-group-pct school)
                       :label (str (:enrollment-group-label school) " enrollment")
                       :sub (str (.toLocaleString (:enrollment-group-count school) "en-US")
                                 " of " total " students")}
-                     {:value total :label "Total enrollment"})]
+                     {:value total :label "Total enrollment"})
+        ;; Build the figure set from available data: selective → Acceptance; always grad
+        ;; rate (when present); 2-year → Transfer-Out; always enrollment. 4-yr = 3 figs,
+        ;; 2-yr = 3 figs.
+        figs (cond-> []
+               (and selective? (:acceptance school))
+               (conj {:value (:acceptance school) :label "Acceptance Rate"})
+               gr
+               (conj {:value (:rate gr) :label (:label gr)
+                      :indicator {:label (:indicator gr) :color gcolor}
+                      :sub (str (:delta gr) " pts vs. " (:normed-against gr) " (avg " (:peer-average gr) "%)")})
+               to
+               (conj {:value (:rate to) :label "Transfer-Out Rate" :sub (:sub to)})
+               :always
+               (conj enroll-fig))]
     ($ :div {:class "space-y-4"}
        ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
-          ($ callout-figure {:value (:acceptance school) :label "Acceptance Rate"})
-          ($ callout-figure {:value (:grad-rate-4yr school) :label "4-Year Graduation Rate"
-                             :indicator {:label (:indicator gnorm) :color gcolor}
-                             :sub (str (:delta gnorm) " pts vs. similar-size LA publics (avg " (:band-average gnorm) "%)")})
-          ($ callout-figure enroll-fig))
+          (for [[i f] (map-indexed vector figs)]
+            ($ callout-figure (assoc f :key i))))
        ($ bullet-list
           {:bullets
-           [($ :span nil
-               (str "Located " (:distance school) " — " (:setting school) ". See ")
-               ($ ext-link {:href (:campus-life-url school) :label "campus life"
-                            :title (str (:short-name school) " — campus life")})
-               ".")
-            (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
-                 (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
-                 " here — admission is very likely and a good academic match.")]}))))
+           [;; Location / setting (+ campus-life link when a school has one)
+            (if (:campus-life-url school)
+              ($ :span nil
+                 (str "Located " (:distance school) " — " (:setting school) ". See ")
+                 ($ ext-link {:href (:campus-life-url school) :label "campus life"
+                              :title (str (:short-name school) " — campus life")})
+                 ".")
+              (str "Located " (:distance school) " — " (:setting school) "."))
+            ;; Admission framing: STR match (selective) OR open-admission note
+            (if selective?
+              (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
+                   (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
+                   " here — admission is very likely and a good academic match.")
+              (str "This is an open-admission school — there's no ACT or GPA cutoff. If you have a high "
+                   "school diploma or equivalency you can enroll, which makes it an accessible, lower-risk "
+                   "way to begin."))
+            ;; Transfer-out (community colleges) — school-specific, sourced
+            (when to
+              (str "About " (:rate to) " of first-time students transfer out to continue their education "
+                   "at another institution " (:timeframe to) " — many use " (:short-name school)
+                   " as an affordable launchpad toward a bachelor's (IPEDS)."))
+            ;; First-year retention (both, when present)
+            (when (:retention school)
+              (str "About " (:retention school) " of first-time, full-time students return for their "
+                   "second year (IPEDS retention)."))]}))))
 
 ;; ============================================================================
 ;; Section 6 — What It Costs You (school-anchored; recomputed waterfall)
 ;; ============================================================================
 
-(defui costs-section [{:keys [school]}]
+(defui costs-section
+  "School-anchored 'What It Costs You' — INSTITUTION-AGNOSTIC waterfall. Reads generic
+   cost-of-attendance keys (:tuition-fees, :living/:living-label, :books, :coa, :tops/
+   :tops-name, :pell, :net, :aid-covered, optional :avg-debt, :commuter?) so a residential
+   4-year and a commuter 2-year render the same COA → after-TOPS → net-after-Pell chart.
+   The axis scales to the school's COA and the copy adapts to commuter vs. residential."
+  [{:keys [school]}]
   (let [c (:costs school)
-        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
+        usd (fn [n] (str "$" (.toLocaleString n "en-US")))
+        living (or (:living c) (:room-board-on c))
+        living-label (or (:living-label c) "Room & board")
+        coa (:coa c)
+        after-tops (- coa (:tops c))
+        y-max (js/Math.ceil (* 1.12 coa))
+        direct (+ (:tuition-fees c) (:books c))   ;; tuition+fees+books = school-charged direct cost
+        commuter? (:commuter? c)]
     ($ :div {:class "space-y-4"}
        ($ charts/financial-aid-waterfall
           {:title "Your Estimated Annual Cost — After Financial Aid"
-           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + Room & board " (usd (:room-board-on c)) " + Books " (usd (:books c)))}
-                          {:color charts/color-net :label "Your estimated net cost after TOPS + Pell"}]
-           :y-max 22000
-           :data [{:name "Total Cost\nof Attendance" :value (:coa c) :label (usd (:coa c)) :fill charts/color-earnings}
-                  {:name (str "After\n" (:tops-name c)) :value (- (:coa c) (:tops c)) :label (usd (- (:coa c) (:tops c))) :fill charts/color-earnings}
+           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + " living-label " " (usd living) " + Books " (usd (:books c)))}
+                          {:color charts/color-net :label (str "Your estimated net cost after " (:tops-name c) " + Pell")}]
+           :y-max y-max
+           :data [{:name "Total Cost\nof Attendance" :value coa :label (usd coa) :fill charts/color-earnings}
+                  {:name (str "After\n" (:tops-name c)) :value after-tops :label (usd after-tops) :fill charts/color-earnings}
                   {:name "Your Net Cost\n(after Pell)" :value (:net c) :label (usd (:net c)) :fill charts/color-net}]})
        ($ bullet-list
           {:bullets
-           [(str "The full cost to attend for one year is about " (usd (:coa c))
-                 " — tuition, fees, housing, and books.")
-            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that.")
-            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year.")
-            (str "Average student debt at graduation is about " (usd (:avg-debt c)) ".")]})
+           [(str "The full cost to attend for one year is about " (usd coa) " — "
+                 (if commuter? "tuition, fees, books, and living costs." "tuition, fees, housing, and books."))
+            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that"
+                 (when (>= (:aid-covered c) direct)
+                   (str " — together they more than cover tuition, fees, and books (" (usd direct) ")"))
+                 ".")
+            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year"
+                 (when (and commuter? (>= (:aid-covered c) direct))
+                   " — mostly living costs, since aid covers your tuition and fees")
+                 ".")
+            (when (:avg-debt c)
+              (str "Average student debt at graduation is about " (usd (:avg-debt c)) "."))]})
        ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
           ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
              ($ :span {:class "font-bold"} "This is an estimate only. ")
@@ -420,7 +479,7 @@
     ($ :div {:class "space-y-3"}
        ($ bullet-list
           {:bullets
-           [(str "Tuition: about " (usd (:tuition f)) "/year (" (:tuition-flag f) ").")
+           [(str "Tuition & fees: about " (usd (:tuition f)) "/year (" (:tuition-flag f) ").")
             (str "Pell Grant: up to " (usd (:pell f)) "/year for eligible students.")
             (str (:tops f) (when (:commuter? f) "; commuter — no room & board in this estimate."))]})
        ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
@@ -529,44 +588,18 @@
          ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4]"}
             ($ pathway-sections {:pathway pathway :school school :student student}))))))
 
-;; CTE schools (2-year) get a MINIMAL About + simple cost — no STR/grad/campus (§5.4).
-(defui cte-about-section [{:keys [school]}]
-  ($ bullet-list
-     {:bullets
-      [(str (:name school) " is a " (:sector school) " in " (:location school) ".")
-       (str "Open-admission and commuter-friendly — " (:distance school) ".")]}))
-
-(defui cte-costs-section [{:keys [school]}]
-  (let [c (:costs school)
-        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
-    ($ :div {:class "space-y-3"}
-       ($ bullet-list
-          {:bullets
-           [(str "Tuition: about " (usd (:tuition c)) "/year (" (:tuition-flag c) ").")
-            (str "Pell Grant: up to " (usd (:pell c)) "/year for eligible students.")
-            (str (:tops c) "; as a Title IV school, federal aid applies.")
-            "Commuter program — no room & board in this estimate."]})
-       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
-          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
-             ($ :span {:class "font-bold"} "Estimate only. ")
-             "Complete the "
-             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
-                          :title "studentaid.gov — complete the FAFSA"})
-             " to confirm your aid and net cost.")))))
-
 (defui school-sections
-  "School-anchored sections — rendered ONCE per school. CTE (2-year) gets minimal
-   About + simple cost; universities get the full callout + cost waterfall."
+  "School-anchored sections — rendered ONCE per school. Every school (4-year or 2-year)
+   goes through the SAME data-driven About + Cost components; what shows is driven by the
+   fields the school record carries, not by school type. A 2-year that lacks a field (e.g.
+   acceptance rate for an open-admission college) simply omits that figure."
   [{:keys [school student]}]
-  (let [cte? (= (:kind school) :cte)]
-    ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
-                            :class "space-y-3"}
-       ($ section-item {:value "about-school" :heading "About This School" :tint? true}
-          (if cte? ($ cte-about-section {:school school})
-                   ($ about-school-section {:school school :student student})))
-       ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
-          (if cte? ($ cte-costs-section {:school school})
-                   ($ costs-section {:school school}))))))
+  ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
+                          :class "space-y-3"}
+     ($ section-item {:value "about-school" :heading "About This School" :tint? true}
+        ($ about-school-section {:school school :student student}))
+     ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
+        ($ costs-section {:school school}))))
 
 (defui school-expanded
   "What unfurls under a school tile: the recommended pathways (each unfurls its own

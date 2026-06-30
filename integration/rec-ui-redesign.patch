@@ -232,10 +232,10 @@ index 0000000..71e0224
 +                               :fontWeight "bold"})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/core.cljs b/ui/advising-hub/src/components/rec_demo/core.cljs
 new file mode 100644
-index 0000000..a54c3ef
+index 0000000..d7527f8
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/core.cljs
-@@ -0,0 +1,784 @@
+@@ -0,0 +1,817 @@
 +(ns components.rec-demo.core
 +  "PROTOTYPE — Rec UI redesign demo page, v2 (route: /rec-demo).
 +
@@ -251,8 +251,9 @@ index 0000000..a54c3ef
 +
 +   All content is hardcoded (components.rec-demo.data). Every discipline-specific
 +   field is conditional so the same components generalize to any bachelor's
-+   pathway. Section display order and grad-rate norming both follow the plan
-+   exactly (see data.cljs `section-order` and `grad-rate-norm`)."
++   pathway. Section display order follows the plan exactly (data.cljs `section-order`);
++   grad-rate norming is sector-aware and carried per-school (each record's :grad-rate),
++   so About This School + What It Costs You render identically for 4-year and 2-year schools."
 +  (:require [uix.core :as uix :refer [defui $ use-state]]
 +            [clojure.string :as str]
 +            [components.rec-demo.data :as data]
@@ -376,8 +377,11 @@ index 0000000..a54c3ef
 +  (cond (>= stars 4) "High demand" (= stars 3) "Steady demand" :else "Some demand"))
 +
 +(defui salary-section
-+  "Two modes: PSEO program-earnings chart when :earnings is present (e.g. SLU BSN);
-+   otherwise an LWC occupation-wage view, clearly labeled (CTE programs with no PSEO)."
++  "Earnings source precedence is PSEO-FIRST, always: program-level PSEO earnings are
++   used whenever present (:earnings, e.g. SLU BSN). The LWC occupation-wage view is the
++   FALLBACK only when PSEO isn't published for this school × program (e.g. BRCC, which is
++   not in the PSEO file) — and it's clearly labeled as occupation-level. This precedence
++   is institution-agnostic: any school with PSEO data shows PSEO; any without falls back."
 +  [{:keys [pathway school]}]
 +  (let [s (:salary pathway)
 +        area (or (:living-wage-area school) data/home-metro)
@@ -532,58 +536,113 @@ index 0000000..a54c3ef
 +          (:label indicator)))
 +     (when sub ($ :div {:class "text-xs text-[#676868] mt-1 leading-snug"} sub))))
 +
-+(defui about-school-section [{:keys [school student]}]
-+  (let [cls (data/classify-str (:act student) (:act-25 school) (:act-75 school))
-+        gnorm data/grad-rate-norm
-+        gcolor (case (:indicator gnorm) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
++(defui about-school-section
++  "School-anchored 'About This School' — INSTITUTION-AGNOSTIC. The 3-figure callout and
++   the narrative bullets are assembled from whatever the school record carries, so a
++   selective 4-year (acceptance + ACT/STR) and an open-admission 2-year (grad rate +
++   transfer-out) render through the same code with no per-school branch."
++  [{:keys [school student]}]
++  (let [selective? (some? (:act-25 school))
++        cls (when selective? (data/classify-str (:act student) (:act-25 school) (:act-75 school)))
++        gr (:grad-rate school)
++        gcolor (case (:indicator gr) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
++        to (:transfer-out school)
 +        total (.toLocaleString (:enrollment-total school) "en-US")
-+        enroll-fig (if (:minority? student)
++        enroll-fig (if (and (:minority? student) (:enrollment-group-pct school))
 +                     {:value (:enrollment-group-pct school)
 +                      :label (str (:enrollment-group-label school) " enrollment")
 +                      :sub (str (.toLocaleString (:enrollment-group-count school) "en-US")
 +                                " of " total " students")}
-+                     {:value total :label "Total enrollment"})]
++                     {:value total :label "Total enrollment"})
++        ;; Build the figure set from available data: selective → Acceptance; always grad
++        ;; rate (when present); 2-year → Transfer-Out; always enrollment. 4-yr = 3 figs,
++        ;; 2-yr = 3 figs.
++        figs (cond-> []
++               (and selective? (:acceptance school))
++               (conj {:value (:acceptance school) :label "Acceptance Rate"})
++               gr
++               (conj {:value (:rate gr) :label (:label gr)
++                      :indicator {:label (:indicator gr) :color gcolor}
++                      :sub (str (:delta gr) " pts vs. " (:normed-against gr) " (avg " (:peer-average gr) "%)")})
++               to
++               (conj {:value (:rate to) :label "Transfer-Out Rate" :sub (:sub to)})
++               :always
++               (conj enroll-fig))]
 +    ($ :div {:class "space-y-4"}
 +       ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
-+          ($ callout-figure {:value (:acceptance school) :label "Acceptance Rate"})
-+          ($ callout-figure {:value (:grad-rate-4yr school) :label "4-Year Graduation Rate"
-+                             :indicator {:label (:indicator gnorm) :color gcolor}
-+                             :sub (str (:delta gnorm) " pts vs. similar-size LA publics (avg " (:band-average gnorm) "%)")})
-+          ($ callout-figure enroll-fig))
++          (for [[i f] (map-indexed vector figs)]
++            ($ callout-figure (assoc f :key i))))
 +       ($ bullet-list
 +          {:bullets
-+           [($ :span nil
-+               (str "Located " (:distance school) " — " (:setting school) ". See ")
-+               ($ ext-link {:href (:campus-life-url school) :label "campus life"
-+                            :title (str (:short-name school) " — campus life")})
-+               ".")
-+            (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
-+                 (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
-+                 " here — admission is very likely and a good academic match.")]}))))
++           [;; Location / setting (+ campus-life link when a school has one)
++            (if (:campus-life-url school)
++              ($ :span nil
++                 (str "Located " (:distance school) " — " (:setting school) ". See ")
++                 ($ ext-link {:href (:campus-life-url school) :label "campus life"
++                              :title (str (:short-name school) " — campus life")})
++                 ".")
++              (str "Located " (:distance school) " — " (:setting school) "."))
++            ;; Admission framing: STR match (selective) OR open-admission note
++            (if selective?
++              (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
++                   (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
++                   " here — admission is very likely and a good academic match.")
++              (str "This is an open-admission school — there's no ACT or GPA cutoff. If you have a high "
++                   "school diploma or equivalency you can enroll, which makes it an accessible, lower-risk "
++                   "way to begin."))
++            ;; Transfer-out (community colleges) — school-specific, sourced
++            (when to
++              (str "About " (:rate to) " of first-time students transfer out to continue their education "
++                   "at another institution " (:timeframe to) " — many use " (:short-name school)
++                   " as an affordable launchpad toward a bachelor's (IPEDS)."))
++            ;; First-year retention (both, when present)
++            (when (:retention school)
++              (str "About " (:retention school) " of first-time, full-time students return for their "
++                   "second year (IPEDS retention)."))]}))))
 +
 +;; ============================================================================
 +;; Section 6 — What It Costs You (school-anchored; recomputed waterfall)
 +;; ============================================================================
 +
-+(defui costs-section [{:keys [school]}]
++(defui costs-section
++  "School-anchored 'What It Costs You' — INSTITUTION-AGNOSTIC waterfall. Reads generic
++   cost-of-attendance keys (:tuition-fees, :living/:living-label, :books, :coa, :tops/
++   :tops-name, :pell, :net, :aid-covered, optional :avg-debt, :commuter?) so a residential
++   4-year and a commuter 2-year render the same COA → after-TOPS → net-after-Pell chart.
++   The axis scales to the school's COA and the copy adapts to commuter vs. residential."
++  [{:keys [school]}]
 +  (let [c (:costs school)
-+        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
++        usd (fn [n] (str "$" (.toLocaleString n "en-US")))
++        living (or (:living c) (:room-board-on c))
++        living-label (or (:living-label c) "Room & board")
++        coa (:coa c)
++        after-tops (- coa (:tops c))
++        y-max (js/Math.ceil (* 1.12 coa))
++        direct (+ (:tuition-fees c) (:books c))   ;; tuition+fees+books = school-charged direct cost
++        commuter? (:commuter? c)]
 +    ($ :div {:class "space-y-4"}
 +       ($ charts/financial-aid-waterfall
 +          {:title "Your Estimated Annual Cost — After Financial Aid"
-+           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + Room & board " (usd (:room-board-on c)) " + Books " (usd (:books c)))}
-+                          {:color charts/color-net :label "Your estimated net cost after TOPS + Pell"}]
-+           :y-max 22000
-+           :data [{:name "Total Cost\nof Attendance" :value (:coa c) :label (usd (:coa c)) :fill charts/color-earnings}
-+                  {:name (str "After\n" (:tops-name c)) :value (- (:coa c) (:tops c)) :label (usd (- (:coa c) (:tops c))) :fill charts/color-earnings}
++           :legend-items [{:color charts/color-earnings :label (str "Tuition & fees " (usd (:tuition-fees c)) " + " living-label " " (usd living) " + Books " (usd (:books c)))}
++                          {:color charts/color-net :label (str "Your estimated net cost after " (:tops-name c) " + Pell")}]
++           :y-max y-max
++           :data [{:name "Total Cost\nof Attendance" :value coa :label (usd coa) :fill charts/color-earnings}
++                  {:name (str "After\n" (:tops-name c)) :value after-tops :label (usd after-tops) :fill charts/color-earnings}
 +                  {:name "Your Net Cost\n(after Pell)" :value (:net c) :label (usd (:net c)) :fill charts/color-net}]})
 +       ($ bullet-list
 +          {:bullets
-+           [(str "The full cost to attend for one year is about " (usd (:coa c))
-+                 " — tuition, fees, housing, and books.")
-+            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that.")
-+            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year.")
-+            (str "Average student debt at graduation is about " (usd (:avg-debt c)) ".")]})
++           [(str "The full cost to attend for one year is about " (usd coa) " — "
++                 (if commuter? "tuition, fees, books, and living costs." "tuition, fees, housing, and books."))
++            (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that"
++                 (when (>= (:aid-covered c) direct)
++                   (str " — together they more than cover tuition, fees, and books (" (usd direct) ")"))
++                 ".")
++            (str "That leaves an estimated net cost of about " (usd (:net c)) " for the year"
++                 (when (and commuter? (>= (:aid-covered c) direct))
++                   " — mostly living costs, since aid covers your tuition and fees")
++                 ".")
++            (when (:avg-debt c)
++              (str "Average student debt at graduation is about " (usd (:avg-debt c)) "."))]})
 +       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
 +          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
 +             ($ :span {:class "font-bold"} "This is an estimate only. ")
@@ -658,7 +717,7 @@ index 0000000..a54c3ef
 +    ($ :div {:class "space-y-3"}
 +       ($ bullet-list
 +          {:bullets
-+           [(str "Tuition: about " (usd (:tuition f)) "/year (" (:tuition-flag f) ").")
++           [(str "Tuition & fees: about " (usd (:tuition f)) "/year (" (:tuition-flag f) ").")
 +            (str "Pell Grant: up to " (usd (:pell f)) "/year for eligible students.")
 +            (str (:tops f) (when (:commuter? f) "; commuter — no room & board in this estimate."))]})
 +       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
@@ -767,44 +826,18 @@ index 0000000..a54c3ef
 +         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4]"}
 +            ($ pathway-sections {:pathway pathway :school school :student student}))))))
 +
-+;; CTE schools (2-year) get a MINIMAL About + simple cost — no STR/grad/campus (§5.4).
-+(defui cte-about-section [{:keys [school]}]
-+  ($ bullet-list
-+     {:bullets
-+      [(str (:name school) " is a " (:sector school) " in " (:location school) ".")
-+       (str "Open-admission and commuter-friendly — " (:distance school) ".")]}))
-+
-+(defui cte-costs-section [{:keys [school]}]
-+  (let [c (:costs school)
-+        usd (fn [n] (str "$" (.toLocaleString n "en-US")))]
-+    ($ :div {:class "space-y-3"}
-+       ($ bullet-list
-+          {:bullets
-+           [(str "Tuition: about " (usd (:tuition c)) "/year (" (:tuition-flag c) ").")
-+            (str "Pell Grant: up to " (usd (:pell c)) "/year for eligible students.")
-+            (str (:tops c) "; as a Title IV school, federal aid applies.")
-+            "Commuter program — no room & board in this estimate."]})
-+       ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
-+          ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
-+             ($ :span {:class "font-bold"} "Estimate only. ")
-+             "Complete the "
-+             ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
-+                          :title "studentaid.gov — complete the FAFSA"})
-+             " to confirm your aid and net cost.")))))
-+
 +(defui school-sections
-+  "School-anchored sections — rendered ONCE per school. CTE (2-year) gets minimal
-+   About + simple cost; universities get the full callout + cost waterfall."
++  "School-anchored sections — rendered ONCE per school. Every school (4-year or 2-year)
++   goes through the SAME data-driven About + Cost components; what shows is driven by the
++   fields the school record carries, not by school type. A 2-year that lacks a field (e.g.
++   acceptance rate for an open-admission college) simply omits that figure."
 +  [{:keys [school student]}]
-+  (let [cte? (= (:kind school) :cte)]
-+    ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
-+                            :class "space-y-3"}
-+       ($ section-item {:value "about-school" :heading "About This School" :tint? true}
-+          (if cte? ($ cte-about-section {:school school})
-+                   ($ about-school-section {:school school :student student})))
-+       ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
-+          (if cte? ($ cte-costs-section {:school school})
-+                   ($ costs-section {:school school}))))))
++  ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
++                          :class "space-y-3"}
++     ($ section-item {:value "about-school" :heading "About This School" :tint? true}
++        ($ about-school-section {:school school :student student}))
++     ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
++        ($ costs-section {:school school}))))
 +
 +(defui school-expanded
 +  "What unfurls under a school tile: the recommended pathways (each unfurls its own
@@ -1022,10 +1055,10 @@ index 0000000..a54c3ef
 +                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..f0c986b
+index 0000000..112f2f3
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,573 @@
+@@ -0,0 +1,626 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -1040,7 +1073,8 @@ index 0000000..f0c986b
 +
 +   Both previously-flagged items now follow the plan exactly:
 +     • SECTION DISPLAY ORDER — Build Plan §3 order, in `section-order`.
-+     • 4-YR GRAD-RATE NORMING — spec bands/thresholds, computed in `grad-rate-norm`."
++     • GRAD-RATE NORMING — sector-aware, carried per-school under each record's :grad-rate
++       (see the norming note below); renders identically for 4-year and 2-year schools."
 +  ;; Pure data namespace — no presentation deps; the components assemble all display
 +  ;; strings (chart names, legends, copy) from these fields.
 +  )
@@ -1131,26 +1165,23 @@ index 0000000..f0c986b
 +    :else                    {:key "reach"  :label "Reach"  :color "#c92a4a"}))
 +
 +;; ----------------------------------------------------------------------------
-+;; 4-year grad-rate norming — Obney spec bands/thresholds, COMPUTED exactly.
-+;; Method: gr2024 bachelor's cohort (GRTYPE 8 adjusted cohort, GRTYPE 13 = completers
-+;; within 100% normal time) ÷ → 4-yr rate; UG enrollment via ef2024a (EFALEVEL=2,
-+;; LINE=99) sets the size band; band average is the mean 4-yr rate across LA public
-+;; 4-years (bor_ipeds_bridge) in the SAME band. Indicator: High ≥ +5 pts vs band
-+;; avg · Low ≤ −5 · Medium otherwise.
-+;;   SLU 4-yr 26.3% · band 10,000–20,000 {ULL 26.9, SLU 26.3, LA Tech 44.5} avg 32.6%
-+;;   → 26.3 − 32.6 = −6.3 pts → Low.
++;; GRAD-RATE NORMING — sector-aware and INSTITUTION-AGNOSTIC. The norm now lives on
++;; each school record under :grad-rate, so every recommended school (4-year OR 2-year)
++;; carries its own sourced rate + peer comparison; the component renders whatever is
++;; present (no per-school branch). The mechanism is identical for any institution:
++;;
++;;   rate  = IPEDS gr2024 completers-within-150%-of-normal-time ÷ adjusted cohort
++;;           (4-year cohort GRTYPE 8/13 → 4-yr rate; 2-year cohort GRTYPE 29/30 → 3-yr rate)
++;;   peers = mean rate across SAME-SECTOR Louisiana public institutions
++;;           (4-year: size-banded by ef2024a UG enrollment; 2-year: statewide)
++;;   indicator = High ≥ +5 pts vs peer avg · Low ≤ −5 · Medium otherwise
++;;
++;; Worked values (see each school's :grad-rate):
++;;   SLU  26.3% · band 10,000–20,000 {ULL 26.9, SLU 26.3, LA Tech 44.5} avg 32.6% → −6.3 → Low
++;;   BRCC 31.0% (299/964) · LA public 2-yr {BRCC 31.0, River Parishes 29.6} avg 30.3% → +0.7 → Medium
++;; CAVEAT (acquisition): the in-repo LA roster resolves only 2 public 2-years; completing
++;; the LCTCS roster (bor_ipeds_bridge or IPEDS HD directory) widens the 2-year peer set.
 +;; ----------------------------------------------------------------------------
-+
-+(def grad-rate-norm
-+  {:status :final
-+   :size-bands ["<5,000" "5,000–10,000" "10,000–20,000" ">20,000"]
-+   :slu-band "10,000–20,000"           ;; SLU UG enrollment 13,192
-+   :slu-rate 26.3
-+   :band-average 32.6
-+   :band-members 3
-+   :delta -6.3
-+   :indicator "Low"                    ;; ≤ −5 pts vs band average
-+   :threshold "High ≥ +5 pts vs band avg · Low ≤ −5 pts · Medium otherwise"})
 +
 +;; ----------------------------------------------------------------------------
 +;; Per-pathway SECTION DISPLAY ORDER — Build Plan §3 order (1–4). Sections 5 & 6
@@ -1188,7 +1219,15 @@ index 0000000..f0c986b
 +   :acceptance "99%"                 ;; acceptance_rate 0.9898 (was mislabeled 94% in v1)
 +
 +   ;; --- About This School: 3-figure callout (Build Plan §3.5) ---
-+   :grad-rate-4yr "26%"              ;; gr2024 · 100%-time bachelor's completers · UNITID 160612 (26.3%)
++   ;; Grad-rate norm carried on the school (sector-aware; see norming note above).
++   :grad-rate {:rate "26%" :rate-num 26.3
++               :label "4-Year Graduation Rate"
++               :normed-against "similar-size LA public 4-years"
++               :peer-average "32.6" :peer-n 3 :delta "−6.3" :indicator "Low"
++               :method (str "IPEDS gr2024 bachelor's 100%-time completers ÷ adjusted cohort (UNITID 160612 = 26.3%). "
++                            "Peer avg = mean 4-yr rate across LA public 4-years in the same UG-enrollment band "
++                            "(10,000–20,000: ULL 26.9, SLU 26.3, LA Tech 44.5 → 32.6). "
++                            "Indicator: High ≥ +5 pts · Low ≤ −5 · Medium otherwise.")}
 +   :enrollment-total 13192          ;; ef2024a EFTOTLT
 +   :enrollment-group-label "Black/African American"
 +   :enrollment-group-count 2586     ;; ef2024a EFBKAAT (≈19.6% of total)
@@ -1201,6 +1240,7 @@ index 0000000..f0c986b
 +   ;; --- What It Costs You (school-anchored; recomputed on BOR FY26) ---
 +   :costs {:tuition 5777 :fees 3266 :tuition-fees 9043      ;; BOR FY26 (replaces IPEDS $8,373)
 +           :room-board-on 10240 :room-board-off 11812
++           :living 10240 :living-label "Room & board"       ;; generic cost-of-attendance line (on-campus)
 +           :books 1300
 +           :coa 20583                                       ;; 9043 + 10240 + 1300
 +           :tops 5652 :tops-name "TOPS Opportunity"         ;; LOSFA OPH (current-year)
@@ -1360,24 +1400,63 @@ index 0000000..f0c986b
 +;; ============================================================================
 +
 +;; --- Baton Rouge Community College (2-year / CTE home for the samples) --------
++;; BRCC is sourced to PARITY with the 4-year school — every field below comes from the
++;; same institution-agnostic datasets used for SLU (BOR FY26 fee detail, IPEDS gr2024 /
++;; ef2024a / ef2024d), so the SAME About/Cost components render any 2-year the same way.
 +(def brcc
 +  {:unitid "437103"
 +   :name "Baton Rouge Community College"
 +   :short-name "BRCC"
 +   :type "Public 2-Year"
-+   :kind :cte                          ;; suppresses STR badge / grad-norming / campus life
++   :kind :two-year                     ;; open-admission (no ACT) → "Open Admission" badge; commuter cost copy
 +   :city "Baton Rouge" :state "LA"
 +   :location "Baton Rouge, LA"
 +   :distance "In Baton Rouge"          ;; distance_from_baton_rouge_miles = 0
 +   :sector "Public, 2-year"
++   :setting "an open-admission community college with a commuter campus"
 +   :logo "assets/brcc-logo.jpg"        ;; official BRCC wordmark (Wikimedia)
 +   :website "https://www.mybrcc.edu"
 +   :website-label "mybrcc.edu"
-+   ;; Minimal cost (per decision: 2-year = minimal). Scorecard tuition-only (flag);
-+   ;; no room/board (commuter). Pell/TOPS-Tech per louisiana_programs + LOSFA.
-+   :costs {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
-+           :pell 7395 :tops "TOPS-Tech eligible"
-+           :commuter? true}})
++
++   ;; --- About This School: 3-figure callout (grad rate · transfer-out · enrollment) ---
++   ;; Grad-rate norm — sector-aware, computed exactly like the 4-year (see norming note).
++   :grad-rate {:rate "31%" :rate-num 31.0
++               :label "Graduation Rate (3-yr)"
++               :normed-against "Louisiana public 2-year colleges"
++               :peer-average "30.3" :peer-n 2 :delta "+0.7" :indicator "Medium"
++               :method (str "IPEDS gr2024 2-year cohort: 299 completers within 150% of normal time (3 yrs) "
++                            "÷ 964 adjusted cohort (UNITID 437103 = 31.0%). Peer avg = mean across LA public "
++                            "2-year colleges {BRCC 31.0, River Parishes 29.6} = 30.3%. Indicator: High ≥ +5 pts "
++                            "· Low ≤ −5 · Medium otherwise. Acquisition: complete the LCTCS roster to widen the peer set.")}
++   ;; School-specific TRANSFER data — IPEDS gr2024 transfer-out (community-college mission).
++   :transfer-out {:rate "17%" :rate-num 17.3 :count 167 :cohort 964
++                  :timeframe "within 3 years"
++                  :sub "≈167 of 964 first-time students transfer to continue elsewhere (within 3 yrs)"
++                  :source "IPEDS Graduation Rates — transfer-out, 2024"}
++   :enrollment-total 11182             ;; ef2024a EFTOTLT (UG)
++   :enrollment-group-label "Black/African American"
++   :enrollment-group-count 6359        ;; ef2024a EFBKAAT
++   :enrollment-group-pct "56.9%"
++   :retention "53%"                    ;; ef2024d RET_PCF
++
++   ;; --- What It Costs You — FULL waterfall, sourced from BOR/IPEDS (parity w/ 4-year) ---
++   ;; Tuition & fees now come from BOR FY26 (authoritative, tuition+fees) — NOT Scorecard
++   ;; tuition-only. Commuter school: living = off-campus allowance (IPEDS), no on-campus
++   ;; room/board. TOPS-Tech + Pell cover all direct costs; net is mostly living costs.
++   :costs {:tuition-fees 4419 :tuition-fees-source "BOR FY26 (resident, tuition & fees)"
++           :living 9932 :living-label "Living (off-campus)"   ;; IPEDS off-campus room/board allowance
++           :books 1300                                         ;; IPEDS/Scorecard books & supplies
++           :coa 15651                                          ;; 4419 + 9932 + 1300
++           :tops 3086 :tops-name "TOPS-Tech"                   ;; BOR FY26 TOPS column
++           :pell 7395                                          ;; pell-per-sem 3697.5 × 2
++           :net 5170                                           ;; 15651 − 3086 − 7395
++           :aid-covered 10481                                  ;; coa − net (TOPS-Tech + Pell)
++           ;; Average debt at graduation intentionally OMITTED: the only in-repo figure is the
++           ;; Scorecard per-borrower loan-average ($5,204), which reads misleadingly low and isn't
++           ;; the cumulative "debt at graduation" used for the 4-year. Acquisition: IPEDS cumulative
++           ;; debt for 2-years. (Bullet renders only when :avg-debt exists.)
++           :commuter? true
++           :npc-url "https://www.mybrcc.edu/financial_aid/netpricecalc.php"}})
 +
 +;; --- Colleges tab · 2-year AAS: BRCC Associate Degree Nursing (ADN) -----------
 +(def adn
@@ -1482,7 +1561,14 @@ index 0000000..f0c986b
 +    :cost-note "BRCC tuition now (~$3,237/yr); the bachelor's portion continues at a 4-year — full cost-to-degree depends on the destination you choose."
 +    :destination-careers
 +    [{:title "General & Operations Managers" :soc "11-1021.00" :median 101556 :stars 5
-+      :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}})
++      :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}
++   ;; School-level time-to-degree applies to the transfer associate too (it IS a BRCC
++   ;; associate) — same CMPLTTD institution figure as ADN/Industrial. Answers "why is
++   ;; there no time under Time & Completion": the time cards now render with the 56 completions.
++   :time-to-credential
++   {:designed "~2 years full-time"
++    :actual "≈4.6 years"
++    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
 +
 +;; --- Short-Term tab · certificate: BRCC LPN -----------------------------------
 +(def lpn
@@ -1512,7 +1598,7 @@ index 0000000..f0c986b
 +            :living-wage-band "Near"}    ;; $49,997 vs BR $45,496 = +9.9% → Near
 +   :careers {:roles [{:title "Licensed Practical Nurse (LPN)" :soc "29-2061.00"
 +                      :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}
-+   :funding {:tuition 3237 :tuition-flag "Scorecard, tuition-only"
++   :funding {:tuition 4419 :tuition-flag "BOR FY26, tuition & fees"   ;; BOR FY26 (was Scorecard tuition-only)
 +             :pell 7395 :tops "TOPS-Tech eligible" :commuter? true}})
 +
 +;; --- Short-Term tab · apprenticeship: Electrical (Baton Rouge Electrical JATC) -
