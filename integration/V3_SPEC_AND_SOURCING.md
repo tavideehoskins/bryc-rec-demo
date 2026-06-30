@@ -19,7 +19,7 @@ name mirrors its source, so production wiring is field→source.
 
 1. **Three-tab menu** — `Colleges` · `Short-Term` · `Scholarships` (in-page state; no routing).
 2. **Second college in Colleges** — Baton Rouge Community College (BRCC, 2-year/CTE) alongside SLU.
-3. **Six sourced sample records**: AAS (ADN), technical associate (Industrial Production Tech),
+3. **Six sourced sample records**: associate of science (ASN nursing), technical associate (Industrial Production Tech),
    transfer associate (Business LA Transfer), certificate (LPN), apprenticeship (BR Electrical JATC),
    and 3 scholarships.
 4. **New per-type sections**: Time & Completion, Transfer Plan, Cost & Funding, Earn While You Learn.
@@ -111,17 +111,18 @@ Files in `components/recommendations/resources/recommendations/`. **★ = added 
 | Avg debt ($22,113) | IPEDS institution-wide (PROG `loan-average-amount` $5,368 Scorecard also exists — confirm which) |
 | NPC / FAFSA / campus-life links | verified web (SLU cost page, studentaid.gov, SLU campus_life) |
 
-## Colleges tab — Terminal / Technical Associate (AAS)  *(BRCC ADN; Industrial)*
+## Colleges tab — Terminal / Technical Associate  *(BRCC ASN nursing; Industrial Production)*
 
 | Field | Source (as built) |
 |---|---|
-| Program title, credential (AAS), CIP | PROG `program-title`, `award_level_name`, `cip-code` (ADN 51.3801 · Industrial 15.0699) |
+| Program title, credential, CIP | PROG `award_level_name`, `cip-code` (ASN 51.3801 · Industrial 15.0699). **Display name = institution catalog**: BRCC confers an Associate of **Science** in Nursing (**ASN**), NOT an Applied-Science/AAS — "ADN" is the generic profession-wide term, not BRCC's conferral; Industrial Production is an AAS |
+| **Program-admission caveat** (ASN) *(v3.1)* | open-admission COLLEGE ≠ admission to the competitive NURSING PROGRAM — BRCC ASN page (~2.8 GPA, C+ in 16 prereq credit hours, "meeting minimum requirements does not guarantee acceptance"). 2-year parallel to the BSN caveat. Acquisition for production: per-program admission criteria (NOTION Addendum / catalog) |
 | Career + day-to-day | XWALK CIP→SOC → ONET (RN 29-1141 · Ind. Eng. Tech 17-3026) |
 | **Earnings** | **none — BRCC not in PSEO** → show **LWC occupation wage** (labeled occupation-level) |
 | Demand (stars / growth / openings / median) | LWC, primary SOC (RN ★5 $76,636 +7.55% · Ind. ★5 $99,602) |
 | Living-wage band | computed: LWC occupation median vs MIT BR single-adult |
 | Time-to-credential (designed ~2 yr · typical ≈4.6 yr) | **TTD** — **institution-level** (BRCC FTIC-FT 4.635872; school-wide, NOT per-program) |
-| **Completers / year (program-specific)** | **CMPL** — awards by CIP, BRCC 2024 (ADN **131** · Industrial **29**) |
+| **Completers / year (program-specific)** | **CMPL** — awards by CIP, BRCC 2024 (ASN **131** · Industrial **29**) |
 | License (NCLEX-RN; pass rate omitted) | NOTION Addendum (pass rate = acquisition) |
 | Cost / funding | **school-anchored** — see "2-year School-anchored" table below (now a full BOR/IPEDS waterfall, not minimal) |
 | **Not shown (by data, not by type):** PUMS (non-bachelor's only) · campus life (no campus-life URL) | STR shows **"Open Admission"**; **grad-norm + transfer-out + cost waterfall ARE now shown** (see v3.1) |

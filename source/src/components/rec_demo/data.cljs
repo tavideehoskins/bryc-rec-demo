@@ -398,10 +398,15 @@
            :commuter? true
            :npc-url "https://www.mybrcc.edu/financial_aid/netpricecalc.php"}})
 
-;; --- Colleges tab · 2-year AAS: BRCC Associate Degree Nursing (ADN) -----------
-(def adn
-  {:id "adn" :school :brcc :type :aas
-   :name "Associate Degree Nursing" :acronym "ADN"
+;; --- Colleges tab · 2-year associate: BRCC Associate of Science in Nursing (ASN) ---
+;; Name + acronym from BRCC's OWN catalog (mybrcc.edu ASN program page, ACEN-accredited) —
+;; the IPEDS/Scorecard source only carries the generic CIP 51.3801 title ("Registered
+;; Nursing/Registered Nurse") at award level "Associate's degree", so the institution's
+;; actual degree name is used (BRCC confers an Associate of SCIENCE in Nursing, not an
+;; "ADN"/Applied-Science). "ADN" is the generic profession-wide term, not BRCC's conferral.
+(def asn
+  {:id "asn" :school :brcc :type :as
+   :name "Associate of Science in Nursing" :acronym "ASN"
    :track "Registered Nursing/Registered Nurse" :credential-level "Associate's"
    :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
    :lwc-stars 5
@@ -409,12 +414,21 @@
    :sections [:overview :salary :careers :time-to-credential]
    :overview
    {:credential-line
-    (str "The Associate Degree Nursing (ADN) is a ~2-year community-college degree that "
+    (str "The Associate of Science in Nursing (ASN) is a ~2-year community-college degree that "
          "qualifies you to sit for the NCLEX-RN and become a licensed Registered Nurse — "
          "the same licensure exam as the 4-year BSN.")
     :student-connection
     "Like the BSN, it leads straight into hands-on patient care — a faster, lower-cost route into nursing."
-    :caveat nil
+    ;; CONDITIONAL caveat — open-admission COLLEGE ≠ admission to the NURSING PROGRAM (a
+    ;; separate competitive gate), the 2-year parallel to the SLU BSN caveat. Sourced from
+    ;; BRCC's ASN admission requirements (mybrcc.edu ASN page: ~2.8 GPA, C+ in 16 prereq
+    ;; credit hours, competitive — "meeting minimum admission requirements does not
+    ;; guarantee acceptance"). Acquisition for production: per-program admission criteria.
+    :caveat
+    (str "Heads up: getting into BRCC and getting into its nursing program are two separate "
+         "steps. BRCC is open-admission, but the ASN program is competitive — it expects about "
+         "a 2.8 GPA and a C or better in 16 credit hours of prerequisites, and meeting the "
+         "minimums doesn't guarantee a seat. Your grades count from day one.")
     :day-to-day
     ["Record patients' medical histories and symptoms and monitor their vital signs and condition."
      "Administer medications and treatments, then watch for and document patients' reactions."
@@ -424,7 +438,7 @@
    ;; No PSEO for BRCC → occupation-level wage (LWC), clearly labeled.
    :salary {:occupation {:soc-title "Registered Nurses" :soc "29-1141"
                          :median 76636 :stars 5 :growth-pct "+7.55%" :openings "27,706"
-                         :education "Bachelor's typical for the occupation; the ADN qualifies you for the same RN license"}
+                         :education "Bachelor's typical for the occupation; the ASN qualifies you for the same RN license"}
             :living-wage-band "Above"}   ;; $76,636 vs BR $45,496 = +68%
    :careers {:roles
              [{:title "Registered Nurse (RN)" :soc "29-1141.00"
@@ -435,7 +449,7 @@
                :desc "Cares for the most critically ill patients — high-stakes work needing close monitoring and fast judgment."}
               {:title "Nurse Practitioner (NP)" :soc "29-1171.00"
                :requirement "Requires a BSN, then an MSN or DNP"
-               :desc "Diagnoses, prescribes, and treats patients. From the ADN, bridge to a BSN first, then graduate study."}
+               :desc "Diagnoses, prescribes, and treats patients. From the ASN, bridge to a BSN first, then graduate study."}
               {:title "Certified Registered Nurse Anesthetist (CRNA)" :soc "29-1151.00"
                :requirement "Requires a BSN, then a doctoral degree"
                :desc "Administers anesthesia — among the highest-earning nursing roles. Bridge to a BSN, then doctoral study."}]}
@@ -503,7 +517,7 @@
     [{:title "General & Operations Managers" :soc "11-1021.00" :median 101556 :stars 5
       :desc "Plan, direct, and coordinate the operations of a business or department. Shown at the bachelor's level (the transfer destination)."}]}
    ;; School-level time-to-degree applies to the transfer associate too (it IS a BRCC
-   ;; associate) — same CMPLTTD institution figure as ADN/Industrial. Answers "why is
+   ;; associate) — same CMPLTTD institution figure as ASN/Industrial. Answers "why is
    ;; there no time under Time & Completion": the time cards now render with the 56 completions.
    :time-to-credential
    {:designed "~2 years full-time"
@@ -599,7 +613,7 @@
    :url "http://www.forevernursing.org"
    :eligibility "Enrolled in a state-approved nursing program leading to an associate, baccalaureate, diploma, or direct-entry master's — or an RN-to-BSN completion program."
    :selection "Based on academic achievement, financial need, and involvement in nursing student organizations and community health activities."
-   :why-fits "Works for any nursing route you choose — it explicitly covers associate-degree nursing, so it fits whether you start with the ADN or go straight to the BSN."
+   :why-fits "Works for any nursing route you choose — it explicitly covers associate-degree nursing, so it fits whether you start with the ASN or go straight to the BSN."
    :tips ["Note your financial need and any nursing-club or community-health involvement."
           "You're eligible once you're enrolled and matriculated in an approved nursing program."]})
 
@@ -622,6 +636,6 @@
 ;; Scholarships = scholarship cards.
 (def colleges-schools [school brcc])
 (def college-pathways {"160612" pathways                       ;; SLU
-                       "437103" [adn industrial business-transfer]})  ;; BRCC
+                       "437103" [asn industrial business-transfer]})  ;; BRCC
 (def short-term-programs [lpn electrical-apprenticeship])
 (def scholarship-list [jane-delano-scholarship career-mobility-scholarship flight-away-scholarship])
