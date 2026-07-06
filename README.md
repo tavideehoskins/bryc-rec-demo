@@ -7,7 +7,7 @@ target student-facing UI.
 
 **v3** adds a **three-tab menu** (Colleges · Short-Term · Scholarships), a **second college
 (BRCC, 2-year/CTE)** alongside SLU, and six sourced sample records — an AAS, a technical
-associate, a transfer associate, a certificate (LPN), an apprenticeship, and three scholarships
+associate, a transfer associate, a technical diploma (LPN), an apprenticeship, and three scholarships
 — each a transferable template. Builds on the v2 two-column layout, teal branding, and
 school-anchored About/Costs sections. Content is hardcoded but **every field maps to a named
 source** (PSEO/BOR/IPEDS/LWC/O*NET/IPUMS + Career-OneStop scholarships) — no backend, no Notion

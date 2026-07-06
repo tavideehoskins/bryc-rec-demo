@@ -437,8 +437,9 @@
   (let [t (:time-to-credential pathway)
         c (:completions pathway)
         cards (cond-> []
-                t (into [[(:designed t) "Designed length"] [(:actual t) "Typical actual"]])
-                c (conj [(str (:per-year c)) "Graduates / year"]))
+                (:designed t) (conj [(:designed t) "Designed length"])
+                (:actual t)   (conj [(:actual t) "Typical actual"])   ;; only when an actual time exists (degrees; not certs)
+                c             (conj [(str (:per-year c)) "Graduates / year"]))
         cols (case (count cards) 1 "grid-cols-1" 2 "grid-cols-2" "grid-cols-3")]
     ($ :div {:class "space-y-3"}
        ($ :div {:class (str "grid gap-3 " cols)}

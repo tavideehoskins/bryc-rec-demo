@@ -524,20 +524,31 @@
     :actual "≈4.6 years"
     :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
 
-;; --- Short-Term tab · certificate: BRCC LPN -----------------------------------
+;; --- Short-Term tab · Technical Diploma: BRCC Practical Nursing (LPN) ----------
+;; BRCC confers a Technical Diploma (TD) in Practical Nursing — a five-semester, 59-credit
+;; program (mybrcc.edu catalog), NCLEX-PN eligible → Licensed Practical Nurse. NOT a "certificate".
 (def lpn
-  {:id "lpn" :type :certificate :provider "Baton Rouge Community College"
+  {:id "lpn" :type :technical-diploma :provider "Baton Rouge Community College"
    :name "Licensed Practical/Vocational Nurse" :acronym "LPN"
-   :credential-level "Certificate (1–2 years)" :location "Baton Rouge, LA"
+   :credential-level "Technical Diploma" :location "Baton Rouge, LA"
    :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
    :lwc-stars 4
    :info-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; program_url
    :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)
+   ;; Designed (nominal) length only — a typical ACTUAL time-to-completion isn't in the repo for
+   ;; sub-associate credentials: CMPLTTD (time-to-degree) has only Associate + Baccalaureate sheets.
+   ;; Length sourced from BRCC's catalog (five-semester, 59-credit TD in Practical Nursing).
+   :time-to-credential
+   {:designed "5 semesters"
+    :actual-note (str "Designed length is the nominal full-time program (BRCC catalog: a five-semester, "
+                      "59-credit Technical Diploma in Practical Nursing). A typical actual time-to-completion "
+                      "isn't shown — the state time-to-degree data (CMPLTTD) covers only associate and "
+                      "bachelor's degrees, not certificate/diploma programs.")}
    :sections [:overview :salary :careers :time-to-credential :funding]
    :overview
    {:credential-line
-    (str "A 1–2-year certificate that qualifies you to sit for the NCLEX-PN and work as a "
-         "Licensed Practical Nurse — the fastest licensed-nursing entry point.")
+    (str "A five-semester Technical Diploma that qualifies you to sit for the NCLEX-PN and work "
+         "as a Licensed Practical Nurse — the fastest licensed-nursing entry point.")
     :student-connection
     "A quick, lower-cost way into hands-on patient care — and credits can later build toward an RN."
     :day-to-day

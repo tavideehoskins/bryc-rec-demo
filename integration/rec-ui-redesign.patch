@@ -232,10 +232,10 @@ index 0000000..71e0224
 +                               :fontWeight "bold"})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/core.cljs b/ui/advising-hub/src/components/rec_demo/core.cljs
 new file mode 100644
-index 0000000..3108422
+index 0000000..6f702e7
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/core.cljs
-@@ -0,0 +1,829 @@
+@@ -0,0 +1,830 @@
 +(ns components.rec-demo.core
 +  "PROTOTYPE — Rec UI redesign demo page, v2 (route: /rec-demo).
 +
@@ -675,8 +675,9 @@ index 0000000..3108422
 +  (let [t (:time-to-credential pathway)
 +        c (:completions pathway)
 +        cards (cond-> []
-+                t (into [[(:designed t) "Designed length"] [(:actual t) "Typical actual"]])
-+                c (conj [(str (:per-year c)) "Graduates / year"]))
++                (:designed t) (conj [(:designed t) "Designed length"])
++                (:actual t)   (conj [(:actual t) "Typical actual"])   ;; only when an actual time exists (degrees; not certs)
++                c             (conj [(str (:per-year c)) "Graduates / year"]))
 +        cols (case (count cards) 1 "grid-cols-1" 2 "grid-cols-2" "grid-cols-3")]
 +    ($ :div {:class "space-y-3"}
 +       ($ :div {:class (str "grid gap-3 " cols)}
@@ -1067,10 +1068,10 @@ index 0000000..3108422
 +                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..9489e53
+index 0000000..249a028
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,641 @@
+@@ -0,0 +1,652 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -1597,20 +1598,31 @@ index 0000000..9489e53
 +    :actual "≈4.6 years"
 +    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
 +
-+;; --- Short-Term tab · certificate: BRCC LPN -----------------------------------
++;; --- Short-Term tab · Technical Diploma: BRCC Practical Nursing (LPN) ----------
++;; BRCC confers a Technical Diploma (TD) in Practical Nursing — a five-semester, 59-credit
++;; program (mybrcc.edu catalog), NCLEX-PN eligible → Licensed Practical Nurse. NOT a "certificate".
 +(def lpn
-+  {:id "lpn" :type :certificate :provider "Baton Rouge Community College"
++  {:id "lpn" :type :technical-diploma :provider "Baton Rouge Community College"
 +   :name "Licensed Practical/Vocational Nurse" :acronym "LPN"
-+   :credential-level "Certificate (1–2 years)" :location "Baton Rouge, LA"
++   :credential-level "Technical Diploma" :location "Baton Rouge, LA"
 +   :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
 +   :lwc-stars 4
 +   :info-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; program_url
 +   :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)
++   ;; Designed (nominal) length only — a typical ACTUAL time-to-completion isn't in the repo for
++   ;; sub-associate credentials: CMPLTTD (time-to-degree) has only Associate + Baccalaureate sheets.
++   ;; Length sourced from BRCC's catalog (five-semester, 59-credit TD in Practical Nursing).
++   :time-to-credential
++   {:designed "5 semesters"
++    :actual-note (str "Designed length is the nominal full-time program (BRCC catalog: a five-semester, "
++                      "59-credit Technical Diploma in Practical Nursing). A typical actual time-to-completion "
++                      "isn't shown — the state time-to-degree data (CMPLTTD) covers only associate and "
++                      "bachelor's degrees, not certificate/diploma programs.")}
 +   :sections [:overview :salary :careers :time-to-credential :funding]
 +   :overview
 +   {:credential-line
-+    (str "A 1–2-year certificate that qualifies you to sit for the NCLEX-PN and work as a "
-+         "Licensed Practical Nurse — the fastest licensed-nursing entry point.")
++    (str "A five-semester Technical Diploma that qualifies you to sit for the NCLEX-PN and work "
++         "as a Licensed Practical Nurse — the fastest licensed-nursing entry point.")
 +    :student-connection
 +    "A quick, lower-cost way into hands-on patient care — and credits can later build toward an RN."
 +    :day-to-day

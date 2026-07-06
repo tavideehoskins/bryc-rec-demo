@@ -20,7 +20,7 @@ name mirrors its source, so production wiring is field→source.
 1. **Three-tab menu** — `Colleges` · `Short-Term` · `Scholarships` (in-page state; no routing).
 2. **Second college in Colleges** — Baton Rouge Community College (BRCC, 2-year/CTE) alongside SLU.
 3. **Six sourced sample records**: associate of science (ASN nursing), technical associate (Industrial Production Tech),
-   transfer associate (Business LA Transfer), certificate (LPN), apprenticeship (BR Electrical JATC),
+   transfer associate (Business LA Transfer), technical diploma (Practical Nursing / LPN), apprenticeship (BR Electrical JATC),
    and 3 scholarships.
 4. **New per-type sections**: Time & Completion, Transfer Plan, Cost & Funding, Earn While You Learn.
 5. **As-built deviations from the original spec (call-outs):**
@@ -157,18 +157,19 @@ Rendered ONCE per school by the **same** components as the 4-year. Mirrors the 4
 | Avg debt | **OMITTED** (no sound in-repo cumulative figure; Scorecard per-borrower $5,204 misleads) — acquisition |
 | NPC / FAFSA links | PROG `net-price-calculator-url` (mybrcc.edu); studentaid.gov |
 
-## Short-Term tab — Certificate (BRCC LPN, CIP 51.3901)
+## Short-Term tab — Technical Diploma (BRCC Practical Nursing / LPN, CIP 51.3901)
 
 | Field | Source (as built) |
 |---|---|
-| Program title, certificate type, city | PROG `program-title`, `award_level_name`, `city` |
+| Program title, credential type, city | PROG `program-title`, `city`. **Credential = Technical Diploma** (BRCC catalog: "Technical Diploma (TD) in Practical Nursing") — corrected from "certificate"; graduate sits for NCLEX-PN → LPN |
+| **Designed length — 5 semesters** *(v3.1)* | BRCC catalog (five-semester, 59-credit TD). Shown as "Designed length"; a typical *actual* completion time is NOT shown (see below) |
 | Career + day-to-day | XWALK→ONET (LPN 29-2061) |
 | **Earnings** | none (BRCC not in PSEO) → LWC occupation wage (★4 $49,997 +7.48%) |
 | Completers / year | **CMPL** (CIP 51.3901, BRCC 2024 = **24**) |
 | Funding (Pell / TOPS-Tech, commuter) | PROG `pell-grant-*`, `title-iv-status`; TOPS-Tech |
 | License (NCLEX-PN; pass rate omitted) | NOTION Addendum (pass rate = acquisition) |
 | **More-info link** | PROG `program_url` (mybrcc.edu practical-nursing page) |
-| Length (weeks) / stackability | acquisition (institution / LCTCS) |
+| **Typical actual time-to-completion** / stackability | **acquisition** — CMPLTTD (time-to-degree) has ONLY Associate + Baccalaureate sheets; there is NO sub-associate (certificate/diploma) actual-completion-time in the repo. Stackability: LCTCS |
 
 ## Short-Term tab — Apprenticeship (Baton Rouge Electrical JATC, SOC 47-2111)
 
@@ -248,7 +249,7 @@ Omitted from the student view, flagged on the advisor side.
 | Job-placement / completer employment rate | AAS, Certificate | WIOA ETPL / TrainingProviderResults.gov; LCTCS; BOR workforce report |
 | Articulation + credit applicability | Transfer Associate | BOR Statewide Articulation; LCTCS 2+2 |
 | Apprenticeship duration / journey credential | Apprenticeship | DOL Apprenticeship.gov / RAPIDS |
-| Program length (weeks) + format | Certificate, Apprenticeship | Institution pages (Addendum); LCTCS |
+| **Actual time-to-completion (sub-associate)** + format | Technical Diploma / Certificate, Apprenticeship | acquisition — CMPLTTD covers only Associate + Baccalaureate, so no actual completion time for certificates/diplomas. The **designed/nominal length IS sourced** from the institution catalog (LPN = 5 semesters). Format: institution pages / LCTCS |
 | Stackability / IBC mapping | Certificate | LA LWC/LDOE IBC catalog; Credential Engine; LCTCS |
 | BSN-specific program URL | 4-year | NOTION School Addendum (the PROG row matching SLU was a DNP cert — not used) |
 | Real school logos at scale | All | curated per-UNITID asset store (favicon fallback implemented) |
@@ -262,7 +263,7 @@ Omitted from the student view, flagged on the advisor side.
 3. **Cost helper** ("school hasn't published pricing — contact them") is retained for unreported short-term tuition — content, not a placeholder.
 4. **PUMS** never appears below a bachelor's.
 5. **2-year ≠ suppressed** *(v3.1)* — 2-year schools get the SAME About + Cost depth as 4-year: STR → "Open Admission", but the **grad-rate norm (sector-aware), transfer-out, enrollment/retention, and the full cost waterfall ARE shown**. Only residential **campus life** (no URL) and **PUMS** (non-bachelor's) are absent — by data, not by school type.
-6. **Time vs completions** — time-to-degree is school-wide (CMPLTTD; applies to the transfer associate too); completers/year is program-specific (CMPLRACE); each is labeled with its scope.
+6. **Time vs completions** — time-to-degree is school-wide (CMPLTTD; applies to the transfer associate too); completers/year is program-specific (CMPLRACE); each is labeled with its scope. **Designed length vs typical actual** *(v3.1)*: the "Designed length" card renders whenever a nominal length exists (incl. sub-associate credentials from the catalog, e.g. LPN = 5 semesters); the "Typical actual" card renders **only** when actual completion-time data exists (associate/bachelor's via CMPLTTD) — never fabricated for certificates/diplomas.
 7. **Advisor side keeps every gap visible** (`[DATA NOT FOUND — Advisor Verify]` in the Notion draft + Advisor Review Notes) so omission is never silently lossy.
 
 ---
