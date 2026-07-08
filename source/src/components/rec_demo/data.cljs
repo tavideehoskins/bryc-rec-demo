@@ -168,9 +168,15 @@
                             "(10,000–20,000: ULL 26.9, SLU 26.3, LA Tech 44.5 → 32.6). "
                             "Indicator: High ≥ +5 pts · Low ≤ −5 · Medium otherwise.")}
    :enrollment-total 13192          ;; ef2024a EFTOTLT
-   :enrollment-group-label "Black/African American"
-   :enrollment-group-count 2586     ;; ef2024a EFBKAAT (≈19.6% of total)
-   :enrollment-group-pct "19.6%"
+   ;; Dynamic enrollment box (Upgrade §4.6): ALL race counts carried; the box keys to the
+   ;; STUDENT's own race, falling back to total enrollment for non-minority / race-not-given.
+   :enrollment-races {"Black/African American"           {:count 2589 :pct "19.6%"}
+                      "Hispanic"                         {:count 895  :pct "6.8%"}
+                      "White"                            {:count 8311 :pct "63.0%"}
+                      "Asian"                            {:count 240  :pct "1.8%"}
+                      "American Indian/Alaska Native"    {:count 31   :pct "0.2%"}
+                      "Native Hawaiian/Pacific Islander" {:count 5    :pct "0.0%"}
+                      "Two or more races"                {:count 576  :pct "4.4%"}}
 
    ;; About-This-School narrative bullets
    :setting "a regional public university with a traditional, residential campus feel while staying close to home"
@@ -186,16 +192,18 @@
            :pell 7395                                        ;; pell-per-sem 3697.5 × 2
            :net 7536                                         ;; 20583 − 5652 − 7395
            :aid-covered 13047                                ;; coa − net (TOPS + Pell)
-           ;; Average debt at graduation = IPEDS institution-wide cumulative figure
-           ;; (the standard "debt at graduation"). The Scorecard loan-average-amount
-           ;; ($5,368) is a narrower per-borrower field and reads misleadingly low,
-           ;; so it's NOT used. No peer cumulative-debt source exists for a comparison.
+           ;; Average debt at graduation — College Scorecard MEDIAN DEBT OF COMPLETERS
+           ;; (GRAD_DEBT_MDN): UNITID 160612 = $22,113 (from 5,945 completers). This is the
+           ;; field the current $22,113 actually traces to — the old comment mislabeled it
+           ;; "IPEDS" and it wasn't in any extracted repo file (only the Scorecard per-borrower
+           ;; loan-average $5,368 was, which reads misleadingly low). Wiring: add GRAD_DEBT_MDN
+           ;; to the Scorecard extract, keyed by UNITID (Upgrade §1 / debt-box decision).
            :avg-debt 22113
-           ;; SLU's dedicated Net Price Calculator page is currently 404 on their own
-           ;; site (both /index.html and the directory). Link the WORKING cost &
-           ;; financial-aid page instead. TODO(Cameron): swap to the live NPC tool
-           ;; URL once SLU restores it (federal law requires every school have one).
-           :npc-url "https://www.southeastern.edu/admin/fin_aid/cost/"}
+           :avg-debt-source "College Scorecard — aid.median_debt.completers.overall (GRAD_DEBT_MDN), UNITID 160612"
+           ;; Net-price + financial-aid links from HD2024 (Upgrade §4.7) — the authoritative
+           ;; IPEDS directory fields NPRICURL / FAIDURL (already https for SLU).
+           :npc-url "https://www.southeastern.edu/admin/fin_aid/cost/net_price_calculator/index.html"  ;; HD2024 NPRICURL
+           :faid-url "https://www.southeastern.edu/admin/fin_aid/"}                                     ;; HD2024 FAIDURL
 
    :pathways [:bsn]})
 
@@ -281,14 +289,16 @@
    ;; three tiles are ASSEMBLED in core/salary-section from these + school fields, so
    ;; nothing is hardwired to this school/metro/discipline.
    :salary
-   {:earnings [{:label "1 Year Out"  :value 70105}     ;; PSEO median earnings (y1/y5/y10)
-               {:label "5 Years Out" :value 73162}
-               {:label "10 Years Out" :value 85313}]
+   {:earnings [{:label "1 Year Out"  :value 70105}     ;; PSEO 51.38 Baccalaureate (SLU), Y1 p50 (status 1)
+               {:label "5 Years Out" :value 73162}]    ;; Y5 p50 — Upgrade §4.2: Y1 + Y5 (dropped Y10)
+    :earnings-source "PSEO — 51.38 Baccalaureate, SLU (Y1/Y5 median, status=1)"
     :living-wage-area-value 45496       ;; MIT Living Wage — single adult, home metro
     :living-wage-state-value 42370      ;; MIT Living Wage — single adult, home state
     :living-wage-band "Above"           ;; computed: Y1 70,105 vs BR 45,496 = +54% → Above (>+15%)
-    :growth-rate "+7.55%"               ;; LWC 10-yr growth, primary SOC
-    :growth-openings "27,706"}          ;; LWC projected openings, primary SOC
+    ;; Growth vs openings split (Upgrade §4.8), SOC 29-1141 (LWC):
+    :growth-rate "+7.55%"               ;; growth_pct
+    :growth-net-new "3,300"             ;; growth_10yr — NET NEW jobs
+    :growth-openings "27,706"}          ;; total_openings — incl. replacement/turnover
 
    ;; --- Section 4: Career Paths (O*NET-linked; advanced-cred flagged) ---
    :careers
@@ -373,9 +383,13 @@
                   :sub "≈167 of 964 first-time students transfer to continue elsewhere (within 3 yrs)"
                   :source "IPEDS Graduation Rates — transfer-out, 2024"}
    :enrollment-total 11182             ;; ef2024a EFTOTLT (UG)
-   :enrollment-group-label "Black/African American"
-   :enrollment-group-count 6359        ;; ef2024a EFBKAAT
-   :enrollment-group-pct "56.9%"
+   :enrollment-races {"Black/African American"           {:count 6359 :pct "56.9%"}
+                      "Hispanic"                         {:count 684  :pct "6.1%"}
+                      "White"                            {:count 3389 :pct "30.3%"}
+                      "Asian"                            {:count 168  :pct "1.5%"}
+                      "American Indian/Alaska Native"    {:count 42   :pct "0.4%"}
+                      "Native Hawaiian/Pacific Islander" {:count 12   :pct "0.1%"}
+                      "Two or more races"                {:count 313  :pct "2.8%"}}
    :retention "53%"                    ;; ef2024d RET_PCF
 
    ;; --- What It Costs You — waterfall, sourced from BOR/IPEDS (parity w/ 4-year) ---
@@ -391,12 +405,17 @@
            :net 0                                              ;; aid ($10,481) > direct costs → $0 out of pocket
            :aid-covered 5719                                   ;; aid covers all direct costs (capped at COA)
            :fully-covered? true                                ;; aid ≥ COA → "$0 direct cost" framing
-           ;; Average debt at graduation intentionally OMITTED: the only in-repo figure is the
-           ;; Scorecard per-borrower loan-average ($5,204), which reads misleadingly low and isn't
-           ;; the cumulative "debt at graduation" used for the 4-year. Acquisition: IPEDS cumulative
-           ;; debt for 2-years. (Bullet renders only when :avg-debt exists.)
+           ;; Average debt at graduation — College Scorecard MEDIAN DEBT OF COMPLETERS
+           ;; (GRAD_DEBT_MDN): UNITID 437103 = $12,450 (4,853 completers). SAME authoritative
+           ;; source as the 4-year, so the debt box now renders for 2-years too (resolves the v3
+           ;; omission — the Scorecard per-borrower loan-average $5,204 was the misleading field).
+           :avg-debt 12450
+           :avg-debt-source "College Scorecard — aid.median_debt.completers.overall (GRAD_DEBT_MDN), UNITID 437103"
            :commuter? true
-           :npc-url "https://www.mybrcc.edu/financial_aid/netpricecalc.php"}})
+           ;; Net-price + FAID links from HD2024 (Upgrade §4.7). BRCC's NPRICURL lacked a scheme
+           ;; ("www.mybrcc.edu/...") — https:// PREPENDED per §4.7 (the defect that broke old links).
+           :npc-url "https://www.mybrcc.edu/financial-aid/npc/index.html"     ;; HD2024 NPRICURL (scheme-normalized)
+           :faid-url "https://www.mybrcc.edu/financial-aid/index.php"}})      ;; HD2024 FAIDURL (scheme-normalized)
 
 ;; --- Colleges tab · 2-year associate: BRCC Associate of Science in Nursing (ASN) ---
 ;; Name + acronym from BRCC's OWN catalog (mybrcc.edu ASN program page, ACEN-accredited) —
@@ -435,11 +454,16 @@
      "Coordinate care with physicians and families and explain at-home recovery steps."]}
    :licensure-exam {:name "NCLEX-RN" :url "https://www.nclex.com/"
                     :note "the national exam every new RN must pass to be licensed (pass rate not in repo — advisor verify)"}
-   ;; No PSEO for BRCC → occupation-level wage (LWC), clearly labeled.
-   :salary {:occupation {:soc-title "Registered Nurses" :soc "29-1141"
-                         :median 76636 :stars 5 :growth-pct "+7.55%" :openings "27,706"
-                         :education "Bachelor's typical for the occupation; the ASN qualifies you for the same RN license"}
-            :living-wage-band "Above"}   ;; $76,636 vs BR $45,496 = +68%
+   ;; PSEO cascade (Upgrade §4.2): 6-digit 51.3801 absent → 4-digit 51.38 Associates at BRCC
+   ;; IS published (Y1 $66,466 / Y5 $73,832, status 1). Program-level grad earnings are PREFERRED
+   ;; over the LWC occupation wage — this corrects the v3 "BRCC not in PSEO" assumption (it was
+   ;; only absent at the 6-digit level; the 4-digit cascade surfaces it).
+   :salary {:earnings [{:label "1 Year Out"  :value 66466}
+                       {:label "5 Years Out" :value 73832}]
+            :earnings-source "PSEO — 51.38 Associates, BRCC (4-digit cascade; Y1/Y5 median, status=1)"
+            :living-wage-area-value 45496 :living-wage-state-value 42370
+            :living-wage-band "Above"           ;; $66,466 Y1 vs BR $45,496 = +46% → Above
+            :growth-rate "+7.55%" :growth-net-new "3,300" :growth-openings "27,706"}   ;; SOC 29-1141 (LWC)
    :careers {:roles
              [{:title "Registered Nurse (RN)" :soc "29-1141.00"
                :desc "Provides direct patient care in hospitals, clinics, and surgical units. Requires passing the NCLEX-RN after graduation."}
@@ -458,30 +482,50 @@
     :actual "≈4.6 years"
     :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
 
-;; --- Colleges tab · technical associate: BRCC Industrial Production Tech -------
-(def industrial
-  {:id "industrial" :school :brcc :type :aas
-   :name "Industrial Production Technologies" :acronym nil
+;; --- Colleges tab · technical associate: BRCC Process Technology (CIP 15.0699) -
+;; NAME OVERRIDE (Upgrade §4.3): the raw CIP title is "Industrial Production Technologies";
+;; BRCC's catalog/profile name is "Process Technology" — the profile is the authoritative
+;; display-name override (kept in :cip-title as the fallback). CROSSWALK CORRECTION (§4.5):
+;; 15.0699 maps raw ONLY to Industrial Engineering Technologists (17-3026, $99,602, just 588
+;; openings) — WRONG for this program, which feeds plant/process OPERATORS. Career Paths and
+;; the growth/openings stat use the corrected, profile-verified target SOCs (51-8091/8093/9011).
+(def process-tech
+  {:id "process-tech" :school :brcc :type :aas
+   :name "Process Technology"                          ;; §4.3 catalog/profile display override
+   :cip-title "Industrial Production Technologies"      ;; raw CIP 15.0699 title (fallback when no override)
+   :acronym "PTEC"
    :track "Industrial Production Technologies/Technicians" :credential-level "Associate's"
-   :cip "15.0699" :field "Industrial Technology" :primary-soc "17-3026"
+   :cip "15.0699" :field "Process Technology" :primary-soc "51-8091"
    :lwc-stars 5
    :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
    :sections [:overview :salary :careers :time-to-credential]
    :overview
    {:credential-line
-    (str "A ~2-year associate that prepares you for technical roles keeping manufacturing "
-         "and production systems running — testing, quality, and process work.")
+    (str "A ~2-year associate that trains you to run and monitor the automated systems in "
+         "chemical plants and refineries — the process operators who keep production running "
+         "safely. A core feeder program for Louisiana's plants along the river corridor.")
     :student-connection nil :caveat nil
     :day-to-day
-    ["Test products at set stages of production for performance and adherence to specs."
-     "Compile and evaluate statistical data to maintain product quality and reliability."
-     "Study time, motion, and methods to set standard production procedures."]}
-   :salary {:occupation {:soc-title "Industrial Engineering Technologists & Technicians" :soc "17-3026"
-                         :median 99602 :stars 5 :growth-pct "+15.9%" :openings "588"
-                         :education "Associate's degree (occupation-level entry)"}
-            :living-wage-band "Above"}   ;; $99,602 vs BR $45,496
-   :careers {:roles [{:title "Industrial Engineering Technologist/Technician" :soc "17-3026.00"
-                      :desc "Supports industrial engineers by testing products, analyzing quality data, and improving production processes."}]}
+    ["Monitor and control continuous plant processes from a control room and in the field."
+     "Adjust equipment, valves, and pumps to keep temperature, pressure, and flow in spec."
+     "Inspect equipment and run safety and quality checks, logging readings each shift."]}
+   ;; PSEO cascade (§4.2): 6-digit 15.0699 absent → 4-digit 15.06 Associates at BRCC IS published
+   ;; (Y1 $75,398 / Y5 $124,426, status 1). Program earnings PREFERRED — and far higher than the
+   ;; mis-mapped 17-3026 wage ($99,602) the old occupation lookup showed.
+   :salary {:earnings [{:label "1 Year Out"  :value 75398}
+                       {:label "5 Years Out" :value 124426}]
+            :earnings-source "PSEO — 15.06 Associates, BRCC (4-digit cascade; Y1/Y5 median, status=1)"
+            :living-wage-area-value 45496 :living-wage-state-value 42370
+            :living-wage-band "Above"           ;; $75,398 Y1 vs BR $45,496 = +66% → Above
+            ;; Demand/growth/openings from the CORRECTED target SOC 51-8091 (§4.5, §4.8):
+            :growth-rate "+10.6%" :growth-net-new "342" :growth-openings "3,420"}
+   ;; CORRECTED occupation targets (§4.5): plant/process operators, not the raw 17-3026 mapping.
+   :careers {:roles [{:title "Chemical Plant & System Operators" :soc "51-8091.00"
+                      :desc "Run and monitor the equipment that turns raw materials into chemicals — median $95,124 in Louisiana."}
+                     {:title "Petroleum Pump System & Refinery Operators" :soc "51-8093.00"
+                      :desc "Operate the units that refine crude oil into fuels and products — median $95,552."}
+                     {:title "Chemical Equipment Operators & Tenders" :soc "51-9011.00"
+                      :desc "Operate equipment that mixes, reacts, or processes chemicals — median $80,840."}]}
    :time-to-credential
    {:designed "~2 years full-time"
     :actual "≈4.6 years"
@@ -557,10 +601,14 @@
      "Administer prescribed medications or start IV fluids, noting times and amounts on patients' charts."]}
    :licensure-exam {:name "NCLEX-PN" :url "https://www.nclex.com/"
                     :note "the licensing exam for practical nurses (pass rate not in repo — advisor verify)"}
-   :salary {:occupation {:soc-title "Licensed Practical & Licensed Vocational Nurses" :soc "29-2061"
-                         :median 49997 :stars 4 :growth-pct "+7.48%" :openings "16,532"
-                         :education "Postsecondary non-degree award"}
-            :living-wage-band "Near"}    ;; $49,997 vs BR $45,496 = +9.9% → Near
+   ;; PSEO cascade (§4.2): 51.3901 → 51.39 Certificate 1-2yr at BRCC IS published
+   ;; (Y1 $39,496 / Y5 $51,576, status 1). Program earnings preferred over the LWC wage.
+   :salary {:earnings [{:label "1 Year Out"  :value 39496}
+                       {:label "5 Years Out" :value 51576}]
+            :earnings-source "PSEO — 51.39 Certificate 1-2yr, BRCC (4-digit cascade; Y1/Y5 median, status=1)"
+            :living-wage-area-value 45496 :living-wage-state-value 42370
+            :living-wage-band "Near"            ;; $39,496 Y1 vs BR $45,496 = −13% → Near (within ±15%)
+            :growth-rate "+7.48%" :growth-net-new "1,439" :growth-openings "16,532"}   ;; SOC 29-2061
    :careers {:roles [{:title "Licensed Practical Nurse (LPN)" :soc "29-2061.00"
                       :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}
    :funding {:tuition 4419 :tuition-flag "BOR FY26, tuition & fees"   ;; BOR FY26 (was Scorecard tuition-only)
@@ -586,8 +634,9 @@
     ["Read blueprints and sketches to plan the layout of wiring and equipment to code."
      "Install conduit and pull insulated wiring through walls and concealed spaces."
      "Install, maintain, and repair electrical systems from ladders, scaffolds, and roofs."]}
+   ;; No PSEO for a JATC (not a degree program) → LWC occupation median, labeled "median" (§4.4).
    :salary {:occupation {:soc-title "Electricians" :soc "47-2111"
-                         :median 59259 :stars 5 :growth-pct "+11.7%" :openings "12,294"
+                         :median 59259 :stars 5 :growth-pct "+11.7%" :net-new "1,384" :openings "12,294"
                          :education "High school diploma or equivalent (train on the job)"}
             :living-wage-band "Above"}   ;; $59,259 vs BR $45,496 = +30%
    :careers {:roles [{:title "Electrician" :soc "47-2111.00"
@@ -647,6 +696,6 @@
 ;; Scholarships = scholarship cards.
 (def colleges-schools [school brcc])
 (def college-pathways {"160612" pathways                       ;; SLU
-                       "437103" [asn industrial business-transfer]})  ;; BRCC
+                       "437103" [asn process-tech business-transfer]})  ;; BRCC
 (def short-term-programs [lpn electrical-apprenticeship])
 (def scholarship-list [jane-delano-scholarship career-mobility-scholarship flight-away-scholarship])

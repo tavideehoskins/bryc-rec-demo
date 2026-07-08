@@ -10,8 +10,44 @@ profile. Nothing is guessed. If a field has no source it is omitted from the stu
 placeholder) and flagged on the advisor side.**
 
 All file references verified against the repo on **2026-06-29**; the **2-year parity refresh**
-(§ "v3.1") verified **2026-06-30**. The prototype hardcodes values in `data.cljs`, but every field
-name mirrors its source, so production wiring is field→source.
+(§ "v3.1") verified **2026-06-30**; the **v4 July-2026 upgrade** (§ "v4") verified **2026-07-08**.
+The prototype hardcodes values in `data.cljs`, but every field name mirrors its source, so
+production wiring is field→source.
+
+---
+
+## v4 — July 2026 Upgrade (per `BRYC_Prototype_Upgrade_Plan_July2026.md`)
+
+Built additively from the upgrade plan (CEO/Lucas feedback + LAHS Chapter 3). Delivered in two
+increments; **Increment A (below) is LIVE and verified**; Increment B (structure/UX/modules) follows.
+
+### Increment A — data-correctness layer (§4 of the plan) — SHIPPED 2026-07-08
+
+| Change | As built | Source |
+|---|---|---|
+| **PSEO cascade + Y1/Y5** (§4.2) | Earnings now use the CIP cascade **6→4→2 digit**, Year-1 **and** Year-5 medians (Y10 dropped). Surfaced that BRCC **IS** in PSEO at the 4-digit level (v3's "not in PSEO" was a 6-digit-only miss). SLU BSN $70,105/$73,162 (51.38 Bacc); **ASN $66,466/$73,832** (51.38 Assoc — replaces the LWC wage); **Process Tech $75,398/$124,426** (15.06 Assoc); **LPN $39,496/$51,576** (51.39 Cert). | `pseo_la (1).xlsx` (Earnings sheet, header row 6): `label_institution` (strip `\n`), `label_degree_level`, `cip_level`, `cipcode`, `y1/y5_p50_earnings`, `status_*`=1 |
+| **Program name override** (§4.3) | CIP 15.0699 "Industrial Production Technologies" → catalog name **"Process Technology"** (`:name` override, CIP title kept in `:cip-title` fallback). | program profile / BRCC catalog (no reliable automated feed) |
+| **Crosswalk correction** (§4.5) | Process Tech's raw single map to Industrial Eng. Techs (17-3026, 588 openings) was WRONG → corrected to plant/process **operators**: 51-8091 ($95,124), 51-8093 ($95,552), 51-9011 ($80,840). Career Paths + growth/openings use the corrected SOCs. | `cip_soc_crosswalk.csv` + profile-verified target SOCs; `louisiana_occupation_wages.csv` |
+| **"Median" label** (§4.4) | Every "typical wage" → **"median"** (chart title, bar name, legend, copy). | — (label only; `median_wage` unchanged) |
+| **Growth vs openings split** (§4.8) | Shown as distinct measures: growth% + **net-new jobs** (`growth_10yr`) vs **total openings** (incl. replacement). E.g. 29-1141: +7.55%, ≈3,300 net-new, 27,706 total. | `louisiana_occupation_wages.csv`: `growth_pct`, `growth_10yr`, `total_openings` |
+| **Net-price + FAID links** (§4.7) | Replaced the broken repo field with **HD2024** `NPRICURL`/`FAIDURL`, keyed by UNITID. **BOM stripped** on the header; **`https://` prepended** where absent (BRCC's URLs lacked a scheme — the defect that broke old links). Two links now render (NPC + Financial Aid). | `HD2024.csv`: `NPRICURL`, `FAIDURL` (2,953 US URLs need scheme; verified for SLU/BRCC) |
+| **Avg debt at graduation** (debt-box decision) | Traced the untraceable $22,113 to **College Scorecard median debt of completers** (`GRAD_DEBT_MDN`); relabeled from the wrong "IPEDS" note. Now sourced for 2-years too: **SLU $22,113, BRCC $12,450** (resolves the v3 omission). | College Scorecard API/extract: `aid.median_debt.completers.overall`, keyed by UNITID |
+| **Dynamic enrollment box** (§4.6) | Box keys to the **student's own race** from all `ef2024a` race counts (`:enrollment-races`); falls back to **total** (EFTOTLT) for non-minority / race-not-given. | `ef2024a.csv`: EFTOTLT, EFBKAAT, EFHISPT, EFWHITT, EFASIAT, EFAIANT, EFNHPIT, EF2MORT |
+
+**Regression guard passed:** the SLU BSN card renders identically except the intended changes (Y1/Y5, median labels, growth/openings split).
+
+### Increment B — structure / UX / content modules — IN PROGRESS
+
+§2-3 Degree / Career-Technical / Scholarships categories (terminal-vs-transfer flag; ASN = terminal,
+Business = transfer-designed); §5 collapse-by-default + six hero stat boxes + one shared cost bar +
+expandable scholarships; §6 content modules (Terminal def, transfer-risk, per-type rules-of-the-game,
+universal on-time actions); §8 Time & Completion reframed to intended full-time length; §9 scholarships
+kept on CareerOneStop (curated set not in prototype repo) + UX. Section-1 sources for these are verified.
+
+### New authoritative sources added to Section 1 (v4)
+- **HD2024** `HD2024.csv` — `NPRICURL` / `FAIDURL` (net-price + financial-aid links; strip BOM, prepend scheme).
+- **College Scorecard `GRAD_DEBT_MDN`** — `aid.median_debt.completers.overall` (median debt at graduation, per-UNITID; add to the Scorecard extract alongside `loan-average-amount`).
+- **PSEO CIP cascade** — `pseo_la (1).xlsx`, 6→4→2-digit fallback on `cip_level`/`cipcode`, Y1+Y5, `status`=1.
 
 ---
 

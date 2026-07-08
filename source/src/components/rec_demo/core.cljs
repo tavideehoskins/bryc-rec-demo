@@ -139,11 +139,11 @@
   (cond (>= stars 4) "High demand" (= stars 3) "Steady demand" :else "Some demand"))
 
 (defui salary-section
-  "Earnings source precedence is PSEO-FIRST, always: program-level PSEO earnings are
-   used whenever present (:earnings, e.g. SLU BSN). The LWC occupation-wage view is the
-   FALLBACK only when PSEO isn't published for this school × program (e.g. BRCC, which is
-   not in the PSEO file) — and it's clearly labeled as occupation-level. This precedence
-   is institution-agnostic: any school with PSEO data shows PSEO; any without falls back."
+  "Earnings source precedence is PSEO-FIRST (Upgrade §4.2): program-level PSEO earnings are
+   used whenever the CIP cascade (6→4→2 digit) finds a published row (:earnings). The LWC
+   occupation median is the FALLBACK only when no PSEO row exists (e.g. an apprenticeship).
+   PSEO shows Year-1 + Year-5 medians; occupation mode is labeled 'median' (§4.4). Growth
+   and total openings are shown as DISTINCT measures (§4.8). Institution-agnostic."
   [{:keys [pathway school]}]
   (let [s (:salary pathway)
         area (or (:living-wage-area school) data/home-metro)
@@ -153,6 +153,8 @@
     (if (:earnings s)
       ;; ---- PSEO mode (program-level earnings) ----
       (let [stars (or (:lwc-stars pathway) 0)
+            ;; y-axis scales to the program's own earnings (Process Tech Y5 = $124k > old 100k cap)
+            ymax (int (* 1.15 (apply max (conj (map :value (:earnings s)) (:living-wage-area-value s)))))
             chart-data
             (concat
               (for [e (:earnings s)]
@@ -169,17 +171,20 @@
             tiles [{:kind :stars :value stars :label "Job Demand (LWC)"
                     :detail (str "LWC rates this " stars " of 5 — " (.toLowerCase demand) " in " data/home-state ".")}
                    {:kind :stat :value (:growth-rate s) :label "10-Year Growth"
-                    :detail (str "About " (:growth-openings s) " openings projected statewide — steady, reliable hiring.")}
+                    :detail (str "≈" (:growth-net-new s) " net new jobs over 10 years; " (:growth-openings s)
+                                 " total openings incl. replacement/turnover.")}
                    {:kind :summary :value verdict :label "Bottom line"
                     :detail (str demand ". Graduates " wage ", with clear room to grow into higher-paying roles.")}]]
         ($ :div {:class "space-y-5"}
            ($ charts/salary-vs-col-chart
               {:title "Median Earnings vs. Cost of Living"
-               :legend-items [{:color charts/color-earnings
-                               :label (str (:short-name school) " " (:acronym pathway) " graduate earnings (median)")}
+               :legend-items [{:color charts/color-earnings :label "Graduate earnings (median)"}
                               {:color charts/color-col :label "Living wage for a single adult"}]
-               :y-max 100000
+               :y-max ymax
                :data chart-data})
+           (when (:earnings-source s)
+             ($ :div {:class "text-xs italic text-[#676868]"}
+                (str "Program-level graduate earnings — " (:earnings-source s) ".")))
            ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
               "Based on first-year earnings, graduates of this pathway tend to earn "
               ($ :span {:class "font-bold" :style {:color band-color}} band)
@@ -195,31 +200,31 @@
             demand (demand-word stars)
             chart-data
             ;; short bar name (full occupation title is in the legend) to avoid x-axis overlap
-            [{:name "Typical Wage" :value (:median o) :label (usd (:median o)) :fill charts/color-earnings}
+            [{:name "Median Wage" :value (:median o) :label (usd (:median o)) :fill charts/color-earnings}
              {:name (str "Living Wage —\n" area "\n(Single Adult)")
               :value data/living-wage-area-amount :label (usd data/living-wage-area-amount) :fill charts/color-col}
              {:name (str "Living Wage —\n" data/home-state "\n(Single Adult)")
               :value data/living-wage-state-amount :label (usd data/living-wage-state-amount) :fill charts/color-col}]]
         ($ :div {:class "space-y-4"}
            ($ :div {:class "text-xs italic text-[#676868]"}
-              (str "Occupation-level wage (Louisiana Workforce Commission) — program-level "
-                   "(PSEO) earnings aren't published for this school, so this shows the typical "
-                   "statewide wage for " (:soc-title o) " (" (:education o) ")."))
+              (str "Occupation-level wage (Louisiana Workforce Commission) — program-level (PSEO) "
+                   "earnings aren't published for this program, so this shows the MEDIAN statewide "
+                   "wage for " (:soc-title o) " (" (:education o) ")."))
            ($ charts/salary-vs-col-chart
-              {:title "Typical Wage vs. Cost of Living"
-               :legend-items [{:color charts/color-earnings :label (str (:soc-title o) " — typical Louisiana wage")}
+              {:title "Median Wage vs. Cost of Living"
+               :legend-items [{:color charts/color-earnings :label (str (:soc-title o) " — median Louisiana wage")}
                               {:color charts/color-col :label "Living wage for a single adult"}]
-               :y-max 110000
+               :y-max (int (* 1.15 (max (:median o) data/living-wage-area-amount)))
                :data chart-data})
            ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm md:text-base text-[#313335] leading-relaxed"}
-              "Based on the typical Louisiana wage for this occupation, workers tend to earn "
+              "Based on the median Louisiana wage for this occupation, workers tend to earn "
               ($ :span {:class "font-bold" :style {:color band-color}} band)
               (str " a living wage in " area "."))
            ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-3"}
               ($ salary-tile {:key 0 :kind :stars :value stars :label "Job Demand (LWC)"
                               :detail (str "LWC rates this " stars " of 5 — " (.toLowerCase demand) " in " data/home-state ".")})
               ($ salary-tile {:key 1 :kind :stat :value (:growth-pct o) :label "10-Year Growth"
-                              :detail (str "About " (:openings o) " openings projected statewide.")})))))))
+                              :detail (str "≈" (:net-new o) " net new jobs; " (:openings o) " total openings incl. replacement.")})))))))
 
 ;; ============================================================================
 ;; Section 4 — Career Paths (O*NET-linked + advanced-cred flags + PUMS)
@@ -310,11 +315,14 @@
         gcolor (case (:indicator gr) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
         to (:transfer-out school)
         total (.toLocaleString (:enrollment-total school) "en-US")
-        enroll-fig (if (and (:minority? student) (:enrollment-group-pct school))
-                     {:value (:enrollment-group-pct school)
-                      :label (str (:enrollment-group-label school) " enrollment")
-                      :sub (str (.toLocaleString (:enrollment-group-count school) "en-US")
-                                " of " total " students")}
+        ;; Dynamic enrollment box (§4.6): key to the STUDENT's own race; fall back to total
+        ;; enrollment for a non-minority student or when race isn't given.
+        race (:race-group student)
+        grp (get (:enrollment-races school) race)
+        enroll-fig (if (and (:minority? student) grp)
+                     {:value (:pct grp)
+                      :label (str race " enrollment")
+                      :sub (str (.toLocaleString (:count grp) "en-US") " of " total " students")}
                      {:value total :label "Total enrollment"})
         ;; Build the figure set from available data: selective → Acceptance; always grad
         ;; rate (when present); 2-year → Transfer-Out; always enrollment. 4-yr = 3 figs,
@@ -424,8 +432,13 @@
              ($ ext-link {:href "https://studentaid.gov" :label "FAFSA"
                           :title "studentaid.gov — complete the FAFSA"})
              " and receive your award letter to know your true cost."))
-       ($ ext-link {:href (:npc-url c) :label (str "See " (:short-name school) "'s cost & financial aid info →")
-                    :title (str (:short-name school) " — Cost & Financial Aid")}))))
+       ;; Net-price + financial-aid links (§4.7, HD2024). Both scheme-normalized so they open.
+       ($ :div {:class "flex flex-col gap-1"}
+          ($ ext-link {:href (:npc-url c) :label (str "Estimate your net cost — " (:short-name school) "'s Net Price Calculator →")
+                       :title (str (:short-name school) " — Net Price Calculator")})
+          (when (:faid-url c)
+            ($ ext-link {:href (:faid-url c) :label (str "Explore aid — " (:short-name school) "'s Financial Aid office →")
+                         :title (str (:short-name school) " — Financial Aid")}))))))
 
 ;; ============================================================================
 ;; v3 per-type section renderers (CTE)
