@@ -1077,10 +1077,10 @@ index 0000000..28052ca
 +                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..3f79703
+index 0000000..8482554
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,821 @@
+@@ -0,0 +1,844 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -1263,21 +1263,43 @@ index 0000000..3f79703
 +   :time-to-credential])  ;; 5 — standardized module (Upgrade §8); school-anchored About+Costs follow
 +
 +;; ============================================================================
-+;; CONTENT MODULES (Upgrade §6) — uniform, reusable blocks keyed to pathway type.
-+;; Drafted from the LAHS Chapter 3 pathway articles; plain and non-deterring. INSTITUTION-
-+;; AGNOSTIC: they attach by :rules-type / :terminal? / :transfer?, not per-program.
++;; CONTENT MODULES (Upgrade §6) — the "Making It Pay Off" guidance blocks.
++;; ---------------------------------------------------------------------------
++;; SOURCE OF TRUTH: the Notion "🧭 Rules of the Game" database in "BRYC App — Knowledge Base"
++;;   Database:     https://app.notion.com/p/209ec0dd6655437fb3aefece0e0005fb
++;;   Data source:  collection://ae5402d3-dbe9-436a-ba34-ee65aa415fc0
++;; Each block is a Notion record looked up by its :Key (see `rules-source`). The production engine
++;; reads the record body from Notion LIVE, by Key — Key is derived from the program classification
++;; (:rules-type) or the terminal/transfer flag. Advisors edit the copy in Notion (no code deploy).
++;; The prototype has no backend, so the defs below MIRROR that Notion DB (kept in sync by hand);
++;; content authored from the LAHS Chapter 3 pathway articles. INSTITUTION-AGNOSTIC: blocks attach
++;; by :rules-type / :terminal? / :transfer?, not per-program.
 +;; ============================================================================
 +
++;; Notion source map — the engine resolves a Key → this record and renders its body.
++(def rules-source
++  {:notion-db   "https://app.notion.com/p/209ec0dd6655437fb3aefece0e0005fb"
++   :data-source "collection://ae5402d3-dbe9-436a-ba34-ee65aa415fc0"
++   :records {"terminal-definition" "https://app.notion.com/p/39881487759381969073d5f93c6767bc"
++             "transfer-risk"       "https://app.notion.com/p/398814877593819a9af4e7dc1d20cecb"
++             "on-time-actions"     "https://app.notion.com/p/39881487759381ddba00d9c674747072"
++             "transfer-associate"  "https://app.notion.com/p/3988148775938137990dfa2f2bf2ab41"
++             "aas"                 "https://app.notion.com/p/398814877593819f9257f1dce5f67dfd"
++             "certificate"         "https://app.notion.com/p/398814877593811f9984e60f22f34abf"
++             "apprenticeship"      "https://app.notion.com/p/39881487759381cba6c1e4afd10e69f0"}})
++
++;; mirrors Notion Key "terminal-definition"
 +(def terminal-def
 +  (str "Terminal program: designed to take you straight into a job after you finish. It stands on "
 +       "its own — you don't need to transfer to a four-year school to start working in the field."))
 +
++;; mirrors Notion Key "transfer-risk"
 +(def transfer-risk
 +  (str "Heads up: a transfer-designed program only pays off if you actually transfer and finish the "
 +       "bachelor's, and many students who start don't make it all the way. You can put yourself in the "
 +       "group that finishes by following the steps below."))
 +
-+;; §6.4 — universal on-time actions (ALL pathways); rendered inside Time & Completion (§8).
++;; §6.4 — universal on-time actions (ALL pathways); Time & Completion (§8). Notion Key "on-time-actions".
 +(def on-time-actions
 +  ["Enroll full-time if you can — it strongly raises your odds of finishing."
 +   "Take about 15 credits a semester, not just the 12 that counts as \"full-time,\" to graduate on time."
@@ -1286,7 +1308,8 @@ index 0000000..3f79703
 +   "Take dual-enrollment credits in high school if they're available."
 +   "Seek out work-based learning — internships, clinicals, or co-ops."])
 +
-+;; §6.3 — rules of the game, per pathway type. Keyed by :rules-type on each program.
++;; §6.3 — rules of the game. Map key = program :rules-type = Notion Key
++;; (transfer-associate / aas / certificate / apprenticeship). Engine reads that record's body.
 +(def rules-of-game
 +  {:transfer-associate
 +   ["Choose a field-specific program (biology, business, criminal justice…), not general studies — those waste credits that won't count toward your bachelor's."
