@@ -757,14 +757,16 @@
                 "Advisor-verified")
              ($ :span {:class "text-sm font-semibold text-[#007f81]"} (if open? "Hide ▲" "Details ▼"))))
        (when open?
-         ($ :div {:class "px-5 pb-5 space-y-3"}
+         ;; space-y-5 separates the blocks (why-fits · eligibility · tips · apply) more than the
+         ;; 12px between bullets within a list, so the two bullet groups read as distinct sections.
+         ($ :div {:class "px-5 pb-5 space-y-5"}
             ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-3 text-sm text-[#313335] leading-relaxed"}
                ($ :span {:class "font-semibold text-[#2a6465]"} "Why it fits: ") (:why-fits s))
             ($ bullet-list {:bullets [(str "Eligibility: " (:eligibility s))
                                       (str "Open to: " (:target-levels s) " students")
                                       (:selection s)]})
-            ($ :div
-               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-1"} "Application tips")
+            ($ :div {:class "space-y-2"}
+               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868]"} "Application tips")
                ($ bullet-list {:bullets (:tips s)}))
             ($ ext-link {:href (:url s) :label "Apply / learn more →" :title (:name s)}))))))
 
