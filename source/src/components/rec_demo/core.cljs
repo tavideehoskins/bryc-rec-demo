@@ -393,10 +393,14 @@
                    :value coa :label (usd coa) :fill charts/color-earnings}
                   {:name (str "After\n" (:tops-name c)) :value after-tops :label (usd after-tops) :fill charts/color-earnings}
                   {:name "Your Net Cost\n(after Pell)" :value net :label (usd net) :fill charts/color-net}]})
-       ;; §5.3 — numeric detail is folded into the graph; keep only ACTION bullets.
+       ;; §5.3 — numeric detail is folded into the graph; keep only ACTION bullets. The
+       ;; "live at home" move only applies to a school commutable from the student's home
+       ;; (§5.3 fix): omit it for a school outside the home metro (e.g. SLU in Hammond).
        ($ bullet-list
           {:bullets
-           ["Lower your net cost: live at home instead of on campus, and apply for scholarships (see the Scholarships tab)."
+           [(if (:commutable? school)
+              "Lower your net cost: live at home instead of on campus, and apply for scholarships (see the Scholarships tab)."
+              "Lower your net cost: apply for scholarships (see the Scholarships tab), and weigh on-campus vs. off-campus housing.")
             "Loans can cover what's left — but they're borrowed money you repay with interest, a deferred cost, not free aid."]})
        ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
           ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}

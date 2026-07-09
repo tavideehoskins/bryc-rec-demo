@@ -230,6 +230,7 @@
    :setting "a regional public university with a traditional, residential campus feel while staying close to home"
    :setting-type "Residential"
    :distance-relevant? true
+   :commutable? false               ;; Hammond ~45 mi, outside the BR MSA → a BR student can't live at home (§5.3)
    :retention "71%"                 ;; ef2024d RET_PCF
 
    ;; --- What It Costs You (school-anchored; recomputed on BOR FY26) ---
@@ -250,10 +251,13 @@
            ;; to the Scorecard extract, keyed by UNITID (Upgrade §1 / debt-box decision).
            :avg-debt 22113
            :avg-debt-source "College Scorecard — aid.median_debt.completers.overall (GRAD_DEBT_MDN), UNITID 160612"
-           ;; Net-price + financial-aid links from HD2024 (Upgrade §4.7) — the authoritative
-           ;; IPEDS directory fields NPRICURL / FAIDURL (already https for SLU).
-           :npc-url "https://www.southeastern.edu/admin/fin_aid/cost/net_price_calculator/index.html"  ;; HD2024 NPRICURL
-           :faid-url "https://www.southeastern.edu/admin/fin_aid/"}                                     ;; HD2024 FAIDURL
+           ;; FAID link from HD2024 (§4.7). NPC CORRECTED: SLU's HD2024 NPRICURL
+           ;; (.../net_price_calculator/index.html) now 404s — the WORKING calculator is the
+           ;; vendor-hosted NPC below (verified 200). Acquisition: HD2024 URLs need a liveness
+           ;; check; some .edu paths are stale, so validate on ingest (fall back to the school's
+           ;; financial-aid page when the NPC 404s).
+           :npc-url "https://southeastern.studentaidcalculator.com/survey.aspx"   ;; SLU Net Price Calculator (verified 200)
+           :faid-url "https://www.southeastern.edu/admin/fin_aid/"}               ;; HD2024 FAIDURL
 
    :pathways [:bsn]})
 
@@ -276,11 +280,9 @@
    :lwc-stars 5                         ;; chip 3 source — LWC demand rating for the primary SOC (louisiana_occupation_wages)
    ;; Chips are DERIVED per-pathway from the three fields above (see core/pathway-chips),
    ;; so a school with several programs shows each program's own field/credential/demand.
-   ;; TODO(verify): exact BSN program page (School Addendum). The louisiana_programs
-   ;; row that matched SLU was a DNP cert, not the BSN — do NOT use it. Linked to
-   ;; the school site as a stand-in until the BSN program URL is confirmed.
-   :program-url "https://www.southeastern.edu"
-   :program-url-confirmed? false
+   ;; §6.6 program page — louisiana_programs `program_url` for SLU 51.3801 (verified 200).
+   :program-url "https://www.southeastern.edu/majors-and-minors/nursing-bs/"
+   :program-url-confirmed? true
 
    ;; Licensure/exam — CONDITIONAL (omit for pathways with none).
    :licensure-exam {:name "NCLEX-RN"
@@ -417,6 +419,7 @@
    :setting "an open-admission community college with a commuter campus"
    :setting-type "Commuter"
    :distance-relevant? false           ;; local — distance omitted from the Campus box (§5.2)
+   :commutable? true                   ;; in the BR MSA → a BR student can live at home (§5.3)
    :logo "assets/brcc-logo.jpg"        ;; official BRCC wordmark (Wikimedia)
    :website "https://www.mybrcc.edu"
    :website-label "mybrcc.edu"
@@ -488,6 +491,7 @@
    :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
    :lwc-stars 5
    :completions {:per-year 131 :year "2024"}   ;; program-specific (BOR CMPLRACE, CIP 51.3801, BRCC)
+   :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/asnursing.php"  ;; §6.6 program_url (200)
    :sections [:overview :salary :careers :rules :time-to-credential]
    :overview
    {:credential-line
@@ -556,6 +560,7 @@
    :cip "15.0699" :field "Process Technology" :primary-soc "51-8091"
    :lwc-stars 5
    :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
+   :program-url "https://catalog.mybrcc.edu/preview_program.php?catoid=3&poid=268"  ;; §6.6 program_url (BRCC catalog)
    :sections [:overview :salary :careers :rules :time-to-credential]
    :overview
    {:credential-line
@@ -599,6 +604,7 @@
    :tags ["Transfer-designed" "Louisiana Transfer"]
    :cip "52.0101" :field "Business"
    :completions {:per-year 56 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 52.0101 Associate, BRCC)
+   :program-url "https://mybrcc.edu/academics/business-and-law/asbusiness.php"  ;; §6.6 program_url (200)
    :sections [:overview :transfer-plan :rules :time-to-credential]
    :overview
    {:credential-line

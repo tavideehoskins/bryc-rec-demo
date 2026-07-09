@@ -48,9 +48,14 @@ increments; **Increment A (below) is LIVE and verified**; Increment B (structure
 | **Six hero stat boxes** (§5.2) | About This School is now six boxes, no prose: **[Acceptance \| Transfer-Out] · Graduation Rate (normed) · dynamic Enrollment · Avg Debt at Graduation · First-Year Retention · Campus** (setting + distance-when-relevant). The old "Target" line + prose bullets dropped; the STR badge stays on the tile header. |
 | **Consolidated cost** (§5.3) | Numeric detail folded into the graph; only two **action bullets** kept (lower net cost by not living on campus / applying for scholarships; loans = deferred cost) + the FAFSA note + the NPC/FAID links. |
 | **Collapse-by-default** (§5.1) | Expanding a school/pathway now shows all sub-sections **collapsed** (snapshot view); Overview / About / Costs no longer auto-unfurl. |
-| **Scholarships** (§5.5, §9) | Cards are **expandable** (header always visible, details on click) and labeled **advisor-verified** with a "your advisor keeps this current and can add their own" note. **Source kept on CareerOneStop** for the prototype — the curated ~292-scholarship set (`scholarships_v2_preprocessed`) is not in the prototype repo; the production source decision (curated vs CareerOneStop) stays flagged. |
+| **Scholarships** (§5.5, §9) | Cards are **expandable** (header always visible, details on click) and labeled **advisor-verified** with a "your advisor keeps this current and can add their own" note. **Source = CareerOneStop** — decision RESOLVED 2026-07-09: CareerOneStop is authoritative (the curated `scholarships_v2` list is dropped, no longer a flagged conflict). |
 
 **Regression guard passed** — SLU BSN still renders (now with the 6-box About + reframed Time + collapse). Content modules (§6) are **institution-agnostic**: they attach by `:rules-type` / `:terminal?` / `:transfer?`, not per program.
+
+### v4 follow-ups (2026-07-09)
+- **SLU net-price link fixed** — SLU's HD2024 `NPRICURL` 404s (its `.edu` page moved); the working calculator is the vendor-hosted NPC `southeastern.studentaidcalculator.com` (verified 200). **Wiring note: HD2024 URLs need a liveness check on ingest** — some `.edu` paths are stale; fall back to the school's financial-aid page when the NPC 404s.
+- **"Live at home" cost advice is now conditional** on a new `:commutable?` flag (in/near the student's home metro). BRCC (Baton Rouge) → shows it; SLU (Hammond, ~45 mi, outside the BR MSA) → shows "apply for scholarships / weigh on- vs off-campus housing" instead. Derivable from `distance_from_baton_rouge_miles`.
+- **Program-page links wired for every Overview** (§6.6) — sourced from `program_url` (verified 200): SLU BSN, BRCC ASN, Process Tech (BRCC catalog), Business (LA Transfer), LPN, apprenticeship. None are missing now.
 
 ### New authoritative sources added to Section 1 (v4)
 - **HD2024** `HD2024.csv` — `NPRICURL` / `FAIDURL` (net-price + financial-aid links; strip BOM, prepend scheme).
@@ -68,10 +73,10 @@ increments; **Increment A (below) is LIVE and verified**; Increment B (structure
    and 3 scholarships.
 4. **New per-type sections**: Time & Completion, Transfer Plan, Cost & Funding, Earn While You Learn.
 5. **As-built deviations from the original spec (call-outs):**
-   - **BRCC is not in PSEO** → all BRCC samples show the **LWC occupation wage** (labeled
-     occupation-level), not a program-earnings chart.
-   - **Scholarships** use the in-repo `career_onestop_louisiana_final_4036.csv.gz` (the spec's
-     `scholarships_v2_…csv` lives in the Obney `python/` repo, not the data mount).
+   - ~~**BRCC is not in PSEO** → LWC occupation wage~~ **SUPERSEDED in v4:** BRCC *is* in PSEO at
+     the 4-digit CIP level; the cascade (§4.2) now shows program earnings for the BRCC samples.
+   - **Scholarships** use the in-repo `career_onestop_louisiana_final_4036.csv.gz` — **authoritative**
+     (v4 decision, 2026-07-09; the curated `scholarships_v2` list is dropped).
    - **Time-to-degree (CMPLTTD) is institution-level only** (no CIP column) → shown as a
      school-wide figure; **program-level completions added separately from CMPLRACE**.
    - **Apprenticeship wage progression IS in the repo** (PROG `starting`/`average-income-hourly`)
