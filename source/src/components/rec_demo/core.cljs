@@ -285,9 +285,9 @@
                       (for [[i r] (map-indexed vector tail-roles)] ($ career-row (assoc r :key (+ 100 i))))))
            :label-more "Show advanced-practice paths ▼"
            :label-less "Show fewer ▲"})
-       ;; PUMS — bachelor's only (Build Plan §4 / spec)
+       ;; PUMS — bachelor's only (Build Plan §4 / spec). Field resolves the same way as the chip.
        (when (and (:bachelors? pathway) pums)
-         ($ pums-subsection {:pums pums :field (:field pathway)})))))
+         ($ pums-subsection {:pums pums :field (or (:field pathway) (data/cip->field (:cip pathway)))})))))
 
 ;; ============================================================================
 ;; Section 5 — About This School (school-anchored; 3-figure callout)
@@ -559,15 +559,14 @@
           ($ render {:pathway pathway :school school :student student})))))
 
 (defn pathway-chips
-  "Chips DERIVED per-pathway from sourced fields, so a school with several programs
-   shows each program's own descriptors (Build Plan §6 transferability):
-     • field        — short discipline from the program CIP title
-     • credential   — award_level_name (Bachelor's / Associate / Certificate)
-     • demand       — CONDITIONAL on the primary SOC's LWC star rating
-   The demand chip varies program-to-program (different CIP → SOC → rating) and is
-   omitted when demand is unremarkable."
-  [{:keys [field credential-level lwc-stars]}]
-  (->> [field
+  "Chips DERIVED per-pathway from sourced fields, so ANY recommended program produces them:
+     • field        — data/cip->field on the program CIP (4-digit series → 2-digit family);
+                      a program may override with :field (e.g. a catalog name).
+     • credential   — :credential-level (award_level_name — controlled vocabulary)
+     • demand       — CONDITIONAL on the primary SOC's LWC star rating (≥4 High · 3 Steady)
+   The field chip is now DETERMINISTIC from the CIP, not a hand-shortened title."
+  [{:keys [field credential-level lwc-stars cip]}]
+  (->> [(or field (data/cip->field cip))
         credential-level
         (cond
           (>= (or lwc-stars 0) 4) "High demand"

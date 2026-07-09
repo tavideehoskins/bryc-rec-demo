@@ -276,7 +276,10 @@ All under `components/recommendations/resources/recommendations/`.
 - **Grad-rate norm is sector-aware, per-school** *(v3.1)* — each school carries its own `:grad-rate {rate, normed-against, peer-average, delta, indicator}`. Mechanism = IPEDS rate vs mean of **same-sector** LA public peers (4-yr: size-banded; 2-yr: statewide). High ≥+5 / Low ≤−5 / Med.
 - **Transfer-out** *(v3.1)* — `:transfer-out` (IPEDS GR) renders in About This School when present (community colleges); omitted otherwise.
 - **Cost waterfall is generic** *(v3.1)* — reads `:tuition-fees` / **optional** `:living`+`:living-label` / `:books` / `:coa` / `:tops`+`:tops-name` / `:pell` / `:net` / optional `:avg-debt` / `:commuter?` / `:fully-covered?`; axis scales to COA. A residential school includes `:living` (on-campus room & board, a real charge); a **commuter school omits `:living`** so the COA is school-charged direct costs only. When aid ≥ COA the net shows **$0 out of pocket**. Same chart for both school types.
-- **Chips** — derived per-program from `:field` (CIP title), `:credential-level` (award level), `:lwc-stars` (≥4 → "High demand").
+- **Chips** — derived per-program, all deterministically reproducible for any recommendation:
+  - **Field** *(v4)* — `data/cip->field` on the program CIP: **4-digit CIP series → precise label** (51.38 → "Nursing", 52.01 → "Business"), else **2-digit family → broad area** (51 → "Health"), else omitted. NOT a shortening of the verbose CIP title. A program may override via `:field` (e.g. Process Tech's catalog name "Process Technology"; the CIP-less apprenticeship's "Electrical"). Maps are seeded from NCES CIP-2020 series titles and extensible — production loads the full CIP dictionary.
+  - **Credential** — `:credential-level` = `award_level_name` (controlled vocabulary). Fully reliable.
+  - **Demand** — LWC `star_rating` of the **primary SOC** (≥4 → "High demand" · 3 → "Steady"); reliable when the target SOC is correct (see §4.5 crosswalk curation).
 - **Logos** — curated asset OR domain favicon (any school).
 - **STR / Open Admission** — classifier on ACT vs 25/75; no ACT → "Open Admission".
 - **Conditional fields** — every discipline-specific field omitted when `nil` (e.g. avg-debt for 2-yrs, PUMS below a bachelor's).

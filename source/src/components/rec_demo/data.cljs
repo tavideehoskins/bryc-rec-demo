@@ -104,6 +104,51 @@
     :else                    {:key "reach"  :label "Reach"  :color "#c92a4a"}))
 
 ;; ----------------------------------------------------------------------------
+;; FIELD CHIP — deterministic short discipline label from the program CIP (transferable).
+;; The chip is NOT a shortening of the verbose CIP title (which is unreliable); it's a lookup:
+;;   4-digit CIP series (precise) → else 2-digit series (broad area) → else nil (chip omitted).
+;; A program may still override with :field (e.g. a catalog name like "Process Technology").
+;; Seeded from NCES CIP-2020 series titles; production loads the full CIP dictionary (both maps
+;; are extensible). Institution-agnostic: any program's CIP yields the same label everywhere.
+;; ----------------------------------------------------------------------------
+
+(def cip4-field-labels     ;; 4-digit CIP series → precise short discipline
+  {"51.38" "Nursing"            "51.39" "Nursing"            "51.08" "Allied Health"
+   "51.00" "Health Sciences"    "51.09" "Allied Health"      "51.35" "Health Professions"
+   "52.01" "Business"           "52.02" "Business Admin"      "52.03" "Accounting"
+   "52.08" "Finance"            "52.14" "Marketing"           "52.09" "Hospitality Mgmt"
+   "11.01" "Computer Science"   "11.02" "Computer Programming" "11.10" "IT & Networking"
+   "15.06" "Industrial Production" "15.00" "Engineering Tech"  "15.13" "Drafting/CAD"
+   "14.01" "Engineering"        "43.01" "Criminal Justice"    "43.02" "Fire Science"
+   "13.01" "Education"          "26.01" "Biology"             "42.01" "Psychology"
+   "09.01" "Communication"      "50.04" "Design"              "50.07" "Fine Arts"
+   "12.05" "Culinary Arts"      "12.04" "Cosmetology"         "47.06" "Automotive Tech"
+   "46.03" "Electrical"         "48.05" "Welding & Machining" "49.02" "Aviation"})
+
+(def cip2-field-labels     ;; 2-digit CIP series → broad area (guaranteed fallback)
+  {"01" "Agriculture"          "09" "Communication"          "10" "Media Tech"
+   "11" "Computing"            "12" "Personal Services"      "13" "Education"
+   "14" "Engineering"          "15" "Engineering Tech"       "19" "Human Sciences"
+   "22" "Legal"                "23" "English"                "26" "Biology"
+   "27" "Mathematics"          "31" "Fitness & Recreation"   "40" "Physical Sciences"
+   "41" "Science Tech"         "42" "Psychology"             "43" "Public Safety"
+   "44" "Social Services"      "45" "Social Sciences"        "46" "Construction Trades"
+   "47" "Mechanic & Repair"    "48" "Precision Production"    "49" "Transportation"
+   "50" "Arts"                 "51" "Health"                 "52" "Business"
+   "54" "History"})
+
+(defn cip->field
+  "Deterministic short discipline label for a CIP: 4-digit series first, then 2-digit family,
+   else nil (field chip omitted). A program may override via :field."
+  [cip]
+  (when cip
+    (let [c (str cip)
+          c4 (when (>= (count c) 5) (subs c 0 5))   ;; "51.3801" → "51.38"
+          c2 (when (>= (count c) 2) (subs c 0 2))]  ;; "51.3801" → "51"
+      (or (get cip4-field-labels c4)
+          (get cip2-field-labels c2)))))
+
+;; ----------------------------------------------------------------------------
 ;; GRAD-RATE NORMING — sector-aware and INSTITUTION-AGNOSTIC. The norm now lives on
 ;; each school record under :grad-rate, so every recommended school (4-year OR 2-year)
 ;; carries its own sourced rate + peer comparison; the component renders whatever is
@@ -276,7 +321,7 @@
    :time-to-credential {:intended "4 years, full-time"} ;; §8 standardized module
    :cip "51.38"
    :primary-soc "29-1141"
-   :field "Nursing"                     ;; chip 1 — short field from the CIP title (CIP 51.38 = Registered Nursing)
+   ;; field chip is DERIVED from :cip via data/cip->field (51.38 → "Nursing") — no hardcoded :field.
    :lwc-stars 5                         ;; chip 3 source — LWC demand rating for the primary SOC (louisiana_occupation_wages)
    ;; Chips are DERIVED per-pathway from the three fields above (see core/pathway-chips),
    ;; so a school with several programs shows each program's own field/credential/demand.
@@ -488,7 +533,7 @@
    ;; entirely at BRCC, sits for the NCLEX, and practices as an RN. NOT transfer-designed → no
    ;; transfer tag; belongs under Career-Technical (§2). AAS-style rules-of-the-game (§6.3).
    :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]
-   :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
+   :cip "51.3801" :primary-soc "29-1141"        ;; field chip derived from CIP (51.38 → "Nursing")
    :lwc-stars 5
    :completions {:per-year 131 :year "2024"}   ;; program-specific (BOR CMPLRACE, CIP 51.3801, BRCC)
    :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/asnursing.php"  ;; §6.6 program_url (200)
@@ -557,6 +602,8 @@
    :acronym "PTEC"
    :track "Industrial Production Technologies/Technicians" :credential-level "Associate's"
    :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]   ;; §2/§3
+   ;; :field OVERRIDE — CIP 15.06 would derive "Industrial Production"; the catalog name
+   ;; "Process Technology" is preferred (same catalog-override rationale as :name, §4.3).
    :cip "15.0699" :field "Process Technology" :primary-soc "51-8091"
    :lwc-stars 5
    :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
@@ -602,7 +649,7 @@
    ;; degree → both tags. Belongs under Degree (§2) alongside bachelor's. Transfer-associate rules.
    :category :degree :transfer? true :rules-type :transfer-associate
    :tags ["Transfer-designed" "Louisiana Transfer"]
-   :cip "52.0101" :field "Business"
+   :cip "52.0101"                                ;; field chip derived from CIP (52.01 → "Business")
    :completions {:per-year 56 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 52.0101 Associate, BRCC)
    :program-url "https://mybrcc.edu/academics/business-and-law/asbusiness.php"  ;; §6.6 program_url (200)
    :sections [:overview :transfer-plan :rules :time-to-credential]
@@ -643,7 +690,7 @@
    :credential-level "Technical Diploma" :location "Baton Rouge, LA"
    ;; Now a BRCC school-anchored pathway (§5.4 — shares BRCC's cost bar, not a separate layout).
    :category :career-technical :terminal? true :rules-type :certificate :tags ["Terminal"]   ;; §2/§3
-   :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
+   :cip "51.3901" :primary-soc "29-2061"        ;; field chip derived from CIP (51.39 → "Nursing")
    :lwc-stars 4
    :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; §6.6 Overview link
    :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)

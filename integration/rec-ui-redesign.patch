@@ -232,10 +232,10 @@ index 0000000..71e0224
 +                               :fontWeight "bold"})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/core.cljs b/ui/advising-hub/src/components/rec_demo/core.cljs
 new file mode 100644
-index 0000000..d7d3779
+index 0000000..28052ca
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/core.cljs
-@@ -0,0 +1,840 @@
+@@ -0,0 +1,839 @@
 +(ns components.rec-demo.core
 +  "PROTOTYPE — Rec UI redesign demo page, v2 (route: /rec-demo).
 +
@@ -523,9 +523,9 @@ index 0000000..d7d3779
 +                      (for [[i r] (map-indexed vector tail-roles)] ($ career-row (assoc r :key (+ 100 i))))))
 +           :label-more "Show advanced-practice paths ▼"
 +           :label-less "Show fewer ▲"})
-+       ;; PUMS — bachelor's only (Build Plan §4 / spec)
++       ;; PUMS — bachelor's only (Build Plan §4 / spec). Field resolves the same way as the chip.
 +       (when (and (:bachelors? pathway) pums)
-+         ($ pums-subsection {:pums pums :field (:field pathway)})))))
++         ($ pums-subsection {:pums pums :field (or (:field pathway) (data/cip->field (:cip pathway)))})))))
 +
 +;; ============================================================================
 +;; Section 5 — About This School (school-anchored; 3-figure callout)
@@ -797,15 +797,14 @@ index 0000000..d7d3779
 +          ($ render {:pathway pathway :school school :student student})))))
 +
 +(defn pathway-chips
-+  "Chips DERIVED per-pathway from sourced fields, so a school with several programs
-+   shows each program's own descriptors (Build Plan §6 transferability):
-+     • field        — short discipline from the program CIP title
-+     • credential   — award_level_name (Bachelor's / Associate / Certificate)
-+     • demand       — CONDITIONAL on the primary SOC's LWC star rating
-+   The demand chip varies program-to-program (different CIP → SOC → rating) and is
-+   omitted when demand is unremarkable."
-+  [{:keys [field credential-level lwc-stars]}]
-+  (->> [field
++  "Chips DERIVED per-pathway from sourced fields, so ANY recommended program produces them:
++     • field        — data/cip->field on the program CIP (4-digit series → 2-digit family);
++                      a program may override with :field (e.g. a catalog name).
++     • credential   — :credential-level (award_level_name — controlled vocabulary)
++     • demand       — CONDITIONAL on the primary SOC's LWC star rating (≥4 High · 3 Steady)
++   The field chip is now DETERMINISTIC from the CIP, not a hand-shortened title."
++  [{:keys [field credential-level lwc-stars cip]}]
++  (->> [(or field (data/cip->field cip))
 +        credential-level
 +        (cond
 +          (>= (or lwc-stars 0) 4) "High demand"
@@ -1078,10 +1077,10 @@ index 0000000..d7d3779
 +                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..5c78fca
+index 0000000..3f79703
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,774 @@
+@@ -0,0 +1,821 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -1186,6 +1185,51 @@ index 0000000..5c78fca
 +    (>= student-act act-75)  {:key "safety" :label "Safety" :color "#2f9e44"}
 +    (>= student-act act-25)  {:key "target" :label "Target" :color "#e8a93b"}
 +    :else                    {:key "reach"  :label "Reach"  :color "#c92a4a"}))
++
++;; ----------------------------------------------------------------------------
++;; FIELD CHIP — deterministic short discipline label from the program CIP (transferable).
++;; The chip is NOT a shortening of the verbose CIP title (which is unreliable); it's a lookup:
++;;   4-digit CIP series (precise) → else 2-digit series (broad area) → else nil (chip omitted).
++;; A program may still override with :field (e.g. a catalog name like "Process Technology").
++;; Seeded from NCES CIP-2020 series titles; production loads the full CIP dictionary (both maps
++;; are extensible). Institution-agnostic: any program's CIP yields the same label everywhere.
++;; ----------------------------------------------------------------------------
++
++(def cip4-field-labels     ;; 4-digit CIP series → precise short discipline
++  {"51.38" "Nursing"            "51.39" "Nursing"            "51.08" "Allied Health"
++   "51.00" "Health Sciences"    "51.09" "Allied Health"      "51.35" "Health Professions"
++   "52.01" "Business"           "52.02" "Business Admin"      "52.03" "Accounting"
++   "52.08" "Finance"            "52.14" "Marketing"           "52.09" "Hospitality Mgmt"
++   "11.01" "Computer Science"   "11.02" "Computer Programming" "11.10" "IT & Networking"
++   "15.06" "Industrial Production" "15.00" "Engineering Tech"  "15.13" "Drafting/CAD"
++   "14.01" "Engineering"        "43.01" "Criminal Justice"    "43.02" "Fire Science"
++   "13.01" "Education"          "26.01" "Biology"             "42.01" "Psychology"
++   "09.01" "Communication"      "50.04" "Design"              "50.07" "Fine Arts"
++   "12.05" "Culinary Arts"      "12.04" "Cosmetology"         "47.06" "Automotive Tech"
++   "46.03" "Electrical"         "48.05" "Welding & Machining" "49.02" "Aviation"})
++
++(def cip2-field-labels     ;; 2-digit CIP series → broad area (guaranteed fallback)
++  {"01" "Agriculture"          "09" "Communication"          "10" "Media Tech"
++   "11" "Computing"            "12" "Personal Services"      "13" "Education"
++   "14" "Engineering"          "15" "Engineering Tech"       "19" "Human Sciences"
++   "22" "Legal"                "23" "English"                "26" "Biology"
++   "27" "Mathematics"          "31" "Fitness & Recreation"   "40" "Physical Sciences"
++   "41" "Science Tech"         "42" "Psychology"             "43" "Public Safety"
++   "44" "Social Services"      "45" "Social Sciences"        "46" "Construction Trades"
++   "47" "Mechanic & Repair"    "48" "Precision Production"    "49" "Transportation"
++   "50" "Arts"                 "51" "Health"                 "52" "Business"
++   "54" "History"})
++
++(defn cip->field
++  "Deterministic short discipline label for a CIP: 4-digit series first, then 2-digit family,
++   else nil (field chip omitted). A program may override via :field."
++  [cip]
++  (when cip
++    (let [c (str cip)
++          c4 (when (>= (count c) 5) (subs c 0 5))   ;; "51.3801" → "51.38"
++          c2 (when (>= (count c) 2) (subs c 0 2))]  ;; "51.3801" → "51"
++      (or (get cip4-field-labels c4)
++          (get cip2-field-labels c2)))))
 +
 +;; ----------------------------------------------------------------------------
 +;; GRAD-RATE NORMING — sector-aware and INSTITUTION-AGNOSTIC. The norm now lives on
@@ -1360,7 +1404,7 @@ index 0000000..5c78fca
 +   :time-to-credential {:intended "4 years, full-time"} ;; §8 standardized module
 +   :cip "51.38"
 +   :primary-soc "29-1141"
-+   :field "Nursing"                     ;; chip 1 — short field from the CIP title (CIP 51.38 = Registered Nursing)
++   ;; field chip is DERIVED from :cip via data/cip->field (51.38 → "Nursing") — no hardcoded :field.
 +   :lwc-stars 5                         ;; chip 3 source — LWC demand rating for the primary SOC (louisiana_occupation_wages)
 +   ;; Chips are DERIVED per-pathway from the three fields above (see core/pathway-chips),
 +   ;; so a school with several programs shows each program's own field/credential/demand.
@@ -1572,7 +1616,7 @@ index 0000000..5c78fca
 +   ;; entirely at BRCC, sits for the NCLEX, and practices as an RN. NOT transfer-designed → no
 +   ;; transfer tag; belongs under Career-Technical (§2). AAS-style rules-of-the-game (§6.3).
 +   :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]
-+   :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
++   :cip "51.3801" :primary-soc "29-1141"        ;; field chip derived from CIP (51.38 → "Nursing")
 +   :lwc-stars 5
 +   :completions {:per-year 131 :year "2024"}   ;; program-specific (BOR CMPLRACE, CIP 51.3801, BRCC)
 +   :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/asnursing.php"  ;; §6.6 program_url (200)
@@ -1641,6 +1685,8 @@ index 0000000..5c78fca
 +   :acronym "PTEC"
 +   :track "Industrial Production Technologies/Technicians" :credential-level "Associate's"
 +   :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]   ;; §2/§3
++   ;; :field OVERRIDE — CIP 15.06 would derive "Industrial Production"; the catalog name
++   ;; "Process Technology" is preferred (same catalog-override rationale as :name, §4.3).
 +   :cip "15.0699" :field "Process Technology" :primary-soc "51-8091"
 +   :lwc-stars 5
 +   :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
@@ -1686,7 +1732,7 @@ index 0000000..5c78fca
 +   ;; degree → both tags. Belongs under Degree (§2) alongside bachelor's. Transfer-associate rules.
 +   :category :degree :transfer? true :rules-type :transfer-associate
 +   :tags ["Transfer-designed" "Louisiana Transfer"]
-+   :cip "52.0101" :field "Business"
++   :cip "52.0101"                                ;; field chip derived from CIP (52.01 → "Business")
 +   :completions {:per-year 56 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 52.0101 Associate, BRCC)
 +   :program-url "https://mybrcc.edu/academics/business-and-law/asbusiness.php"  ;; §6.6 program_url (200)
 +   :sections [:overview :transfer-plan :rules :time-to-credential]
@@ -1727,7 +1773,7 @@ index 0000000..5c78fca
 +   :credential-level "Technical Diploma" :location "Baton Rouge, LA"
 +   ;; Now a BRCC school-anchored pathway (§5.4 — shares BRCC's cost bar, not a separate layout).
 +   :category :career-technical :terminal? true :rules-type :certificate :tags ["Terminal"]   ;; §2/§3
-+   :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
++   :cip "51.3901" :primary-soc "29-2061"        ;; field chip derived from CIP (51.39 → "Nursing")
 +   :lwc-stars 4
 +   :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; §6.6 Overview link
 +   :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)
