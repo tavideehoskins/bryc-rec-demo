@@ -1078,10 +1078,10 @@ index 0000000..d7d3779
 +                ($ recommendations-column {:student s})))))))
 diff --git a/ui/advising-hub/src/components/rec_demo/data.cljs b/ui/advising-hub/src/components/rec_demo/data.cljs
 new file mode 100644
-index 0000000..97f446f
+index 0000000..5c78fca
 --- /dev/null
 +++ b/ui/advising-hub/src/components/rec_demo/data.cljs
-@@ -0,0 +1,771 @@
+@@ -0,0 +1,774 @@
 +(ns components.rec-demo.data
 +  "Hardcoded demo content for the rec-redesign PROTOTYPE — v2 (SLU BSN exemplar).
 +
@@ -1848,7 +1848,10 @@ index 0000000..97f446f
 +
 +;; The three tabs (Upgrade §2). :category matches program :category; :scholarships is special.
 +(def categories
-+  [{:key :degree           :label "Degree"           :category :degree}
++  ;; Display label "Bachelor's" (not "Degree") to avoid confusion with Career-Technical, which
++  ;; also grants degrees (AAS). The :category key stays :degree (internal); the tab still holds
++  ;; 4-year programs + transfer-designed associates (the bachelor's-track).
++  [{:key :degree           :label "Bachelor's"       :category :degree}
 +   {:key :career-technical :label "Career-Technical" :category :career-technical}
 +   {:key :scholarships     :label "Scholarships"}])
 +

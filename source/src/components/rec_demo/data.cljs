@@ -764,7 +764,10 @@
 
 ;; The three tabs (Upgrade §2). :category matches program :category; :scholarships is special.
 (def categories
-  [{:key :degree           :label "Degree"           :category :degree}
+  ;; Display label "Bachelor's" (not "Degree") to avoid confusion with Career-Technical, which
+  ;; also grants degrees (AAS). The :category key stays :degree (internal); the tab still holds
+  ;; 4-year programs + transfer-designed associates (the bachelor's-track).
+  [{:key :degree           :label "Bachelor's"       :category :degree}
    {:key :career-technical :label "Career-Technical" :category :career-technical}
    {:key :scholarships     :label "Scholarships"}])
 

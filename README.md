@@ -20,7 +20,7 @@ waterfall — all rendered by the *same* data-driven components, so any recommen
 populates the same way. See the "v3.1" section of the sourcing spec.
 
 **v4** (per `BRYC_Prototype_Upgrade_Plan_July2026.md`, CEO/Lucas feedback) reworks the menu into
-**Degree · Career-Technical · Scholarships** driven by a terminal-vs-transfer flag; fixes earnings
+**Bachelor's · Career-Technical · Scholarships** driven by a terminal-vs-transfer flag; fixes earnings
 with the **PSEO CIP cascade** (Y1/Y5) and corrects the Process Tech occupation/name; adds **six
 hero stat boxes**, a **"Making It Pay Off"** rules-of-the-game module, an on-time-actions **Time &
 Completion** reframe, HD2024 net-price links, and Scorecard debt. Every field still traces to a
