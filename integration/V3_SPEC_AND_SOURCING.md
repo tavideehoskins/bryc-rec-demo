@@ -36,13 +36,21 @@ increments; **Increment A (below) is LIVE and verified**; Increment B (structure
 
 **Regression guard passed:** the SLU BSN card renders identically except the intended changes (Y1/Y5, median labels, growth/openings split).
 
-### Increment B — structure / UX / content modules — IN PROGRESS
+### Increment B — structure / UX / content modules — SHIPPED 2026-07-08
 
-§2-3 Degree / Career-Technical / Scholarships categories (terminal-vs-transfer flag; ASN = terminal,
-Business = transfer-designed); §5 collapse-by-default + six hero stat boxes + one shared cost bar +
-expandable scholarships; §6 content modules (Terminal def, transfer-risk, per-type rules-of-the-game,
-universal on-time actions); §8 Time & Completion reframed to intended full-time length; §9 scholarships
-kept on CareerOneStop (curated set not in prototype repo) + UX. Section-1 sources for these are verified.
+| Change | As built |
+|---|---|
+| **Three categories** (§2) | Tabs are now **Degree · Career-Technical · Scholarships**, driven by a per-program `:category` (from the terminal-vs-transfer flag, §3), NOT length. A school appears in a tab only if it has ≥1 pathway there, so BRCC shows in **both** (Business-Transfer under Degree; ASN + Process Tech + LPN under Career-Technical) with its About/Cost rendered in each. |
+| **Terminal-vs-transfer classification** (§3) | Each program carries `:category` / `:terminal?` / `:transfer?` / `:rules-type` / `:tags`. **ASN = terminal** (Career-Technical, no transfer tag — resolved on the Lucas call); **Business = transfer-designed** (Degree, `Transfer-designed` + `Louisiana Transfer` tags). Amber classification chips + teal derived chips. |
+| **LPN + apprenticeship placement** | LPN is now a **BRCC pathway** (shares BRCC's cost bar, §5.4 — its old separate `:funding` is gone). The apprenticeship (a JATC, not a college) is a **standalone card**, no About/Cost (earn-while-learn). |
+| **Content modules** (§6) | New **"Making It Pay Off"** section: plain-language **Terminal definition** (§6.1) for terminal programs OR the **transfer-risk** warning (§6.2) for transfer programs, then the **rules-of-the-game** (§6.3) for the program's `:rules-type` (transfer-associate / aas / certificate / apprenticeship). Every **Overview links the program page** (§6.6, `program_url`; omitted when absent). |
+| **Time & Completion reframe** (§8) | Now the **intended full-time length** ("2 years, full-time", "5 semesters, full-time"…) + the **universal on-time actions** (§6.4). The misleading "≈4.6 yr" average and the graduates/year count are **gone**. Standardized across all program types (incl. the BSN). |
+| **Six hero stat boxes** (§5.2) | About This School is now six boxes, no prose: **[Acceptance \| Transfer-Out] · Graduation Rate (normed) · dynamic Enrollment · Avg Debt at Graduation · First-Year Retention · Campus** (setting + distance-when-relevant). The old "Target" line + prose bullets dropped; the STR badge stays on the tile header. |
+| **Consolidated cost** (§5.3) | Numeric detail folded into the graph; only two **action bullets** kept (lower net cost by not living on campus / applying for scholarships; loans = deferred cost) + the FAFSA note + the NPC/FAID links. |
+| **Collapse-by-default** (§5.1) | Expanding a school/pathway now shows all sub-sections **collapsed** (snapshot view); Overview / About / Costs no longer auto-unfurl. |
+| **Scholarships** (§5.5, §9) | Cards are **expandable** (header always visible, details on click) and labeled **advisor-verified** with a "your advisor keeps this current and can add their own" note. **Source kept on CareerOneStop** for the prototype — the curated ~292-scholarship set (`scholarships_v2_preprocessed`) is not in the prototype repo; the production source decision (curated vs CareerOneStop) stays flagged. |
+
+**Regression guard passed** — SLU BSN still renders (now with the 6-box About + reframed Time + collapse). Content modules (§6) are **institution-agnostic**: they attach by `:rules-type` / `:terminal?` / `:transfer?`, not per program.
 
 ### New authoritative sources added to Section 1 (v4)
 - **HD2024** `HD2024.csv` — `NPRICURL` / `FAIDURL` (net-price + financial-aid links; strip BOM, prepend scheme).

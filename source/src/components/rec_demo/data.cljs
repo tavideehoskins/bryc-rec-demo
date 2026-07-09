@@ -131,7 +131,54 @@
   [:overview        ;; 1
    :whats-cool      ;; 2
    :salary          ;; 3
-   :careers])       ;; 4  (school-anchored 5 About-This-School + 6 Costs follow)
+   :careers         ;; 4
+   :time-to-credential])  ;; 5 — standardized module (Upgrade §8); school-anchored About+Costs follow
+
+;; ============================================================================
+;; CONTENT MODULES (Upgrade §6) — uniform, reusable blocks keyed to pathway type.
+;; Drafted from the LAHS Chapter 3 pathway articles; plain and non-deterring. INSTITUTION-
+;; AGNOSTIC: they attach by :rules-type / :terminal? / :transfer?, not per-program.
+;; ============================================================================
+
+(def terminal-def
+  (str "Terminal program: designed to take you straight into a job after you finish. It stands on "
+       "its own — you don't need to transfer to a four-year school to start working in the field."))
+
+(def transfer-risk
+  (str "Heads up: a transfer-designed program only pays off if you actually transfer and finish the "
+       "bachelor's, and many students who start don't make it all the way. You can put yourself in the "
+       "group that finishes by following the steps below."))
+
+;; §6.4 — universal on-time actions (ALL pathways); rendered inside Time & Completion (§8).
+(def on-time-actions
+  ["Enroll full-time if you can — it strongly raises your odds of finishing."
+   "Take about 15 credits a semester, not just the 12 that counts as \"full-time,\" to graduate on time."
+   "Don't take breaks or stop out — coming back gets harder the longer you're away."
+   "If you're placed in remedial/developmental courses, ask about corequisite options — college-level courses with built-in support, so you don't lose time and money."
+   "Take dual-enrollment credits in high school if they're available."
+   "Seek out work-based learning — internships, clinicals, or co-ops."])
+
+;; §6.3 — rules of the game, per pathway type. Keyed by :rules-type on each program.
+(def rules-of-game
+  {:transfer-associate
+   ["Choose a field-specific program (biology, business, criminal justice…), not general studies — those waste credits that won't count toward your bachelor's."
+    "Make sure your credits count toward your specific bachelor's major. An articulation agreement guarantees transfer, not that credits apply to your major."
+    "Finish the associate in two years; taking longer lowers your bachelor's odds."]
+   :aas
+   ["A direct-to-work degree, usually two years full-time."
+    "Payoff depends heavily on field — nursing/allied health, advanced manufacturing, engineering/science tech, and skilled trades are strong."
+    "Getting hired often requires passing a licensing or certification exam (e.g. NCLEX for nursing, AWS for welding, NIMS for machining). Confirm the program prepares you, and check which certifications employers value."
+    "AAS isn't usually built for transfer — if you might want a bachelor's later, look for a BAS, an AAS-T, or an articulation agreement."]
+   :certificate
+   ["Know the difference: a certificate means you finished a program (the school gives it); a certification means you passed an industry exam (an industry body gives it); a license means you're legally allowed to do the job. Certifications drive hireability."
+    "With certificates, the field is almost the whole story — skilled trades, practical nursing (LPN), and some protective services are the stronger bets."
+    "A short certificate alone is often not enough for a recent high-school grad — it works best stacked with experience or further credentials."
+    "Confirm students in the program finish, get hired, and pass their certification/licensing exams."]
+   :apprenticeship
+   ["Earn-and-learn: you're a paid employee from day one, with classes a couple of nights a week. No tuition; you pay for tools and books."
+    "Choose a registered program (findable at apprenticeship.gov) with structured on-the-job training, a progressive wage schedule, and a recognized completion credential."
+    "Length comes with the trade — about four years for skilled trades, often one to two for newer healthcare/tech apprenticeships."
+    "These are selective and demanding — ask about completion rates, out-of-pocket costs, and benefits."]})
 
 ;; ============================================================================
 ;; SCHOOL (school-anchored data — keyed by UNITID, shared across all pathways)
@@ -178,9 +225,12 @@
                       "Native Hawaiian/Pacific Islander" {:count 5    :pct "0.0%"}
                       "Two or more races"                {:count 576  :pct "4.4%"}}
 
-   ;; About-This-School narrative bullets
+   ;; About-This-School — 6-box hero stats (§5.2). :setting-type drives the Campus box;
+   ;; :distance shows only when relevant (§5.2) — SLU is ~45 mi, so it's relevant.
    :setting "a regional public university with a traditional, residential campus feel while staying close to home"
-   :retention "71%"                 ;; ef2024d RET_PCF (shown as supporting context)
+   :setting-type "Residential"
+   :distance-relevant? true
+   :retention "71%"                 ;; ef2024d RET_PCF
 
    ;; --- What It Costs You (school-anchored; recomputed on BOR FY26) ---
    :costs {:tuition 5777 :fees 3266 :tuition-fees 9043      ;; BOR FY26 (replaces IPEDS $8,373)
@@ -218,6 +268,8 @@
    :track "Generic Baccalaureate Track"
    :credential-level "Bachelor's"      ;; chip 2 — award_level_name (Scorecard/IPEDS)
    :bachelors? true
+   :category :degree                                    ;; Upgrade §2 tab
+   :time-to-credential {:intended "4 years, full-time"} ;; §8 standardized module
    :cip "51.38"
    :primary-soc "29-1141"
    :field "Nursing"                     ;; chip 1 — short field from the CIP title (CIP 51.38 = Registered Nursing)
@@ -363,6 +415,8 @@
    :distance "In Baton Rouge"          ;; distance_from_baton_rouge_miles = 0
    :sector "Public, 2-year"
    :setting "an open-admission community college with a commuter campus"
+   :setting-type "Commuter"
+   :distance-relevant? false           ;; local — distance omitted from the Campus box (§5.2)
    :logo "assets/brcc-logo.jpg"        ;; official BRCC wordmark (Wikimedia)
    :website "https://www.mybrcc.edu"
    :website-label "mybrcc.edu"
@@ -427,10 +481,14 @@
   {:id "asn" :school :brcc :type :as
    :name "Associate of Science in Nursing" :acronym "ASN"
    :track "Registered Nursing/Registered Nurse" :credential-level "Associate's"
+   ;; Classification (§3, resolved on the Lucas call): the ASN is TERMINAL — a student completes it
+   ;; entirely at BRCC, sits for the NCLEX, and practices as an RN. NOT transfer-designed → no
+   ;; transfer tag; belongs under Career-Technical (§2). AAS-style rules-of-the-game (§6.3).
+   :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]
    :cip "51.3801" :field "Nursing" :primary-soc "29-1141"
    :lwc-stars 5
    :completions {:per-year 131 :year "2024"}   ;; program-specific (BOR CMPLRACE, CIP 51.3801, BRCC)
-   :sections [:overview :salary :careers :time-to-credential]
+   :sections [:overview :salary :careers :rules :time-to-credential]
    :overview
    {:credential-line
     (str "The Associate of Science in Nursing (ASN) is a ~2-year community-college degree that "
@@ -477,10 +535,9 @@
               {:title "Certified Registered Nurse Anesthetist (CRNA)" :soc "29-1151.00"
                :requirement "Requires a BSN, then a doctoral degree"
                :desc "Administers anesthesia — among the highest-earning nursing roles. Bridge to a BSN, then doctoral study."}]}
-   :time-to-credential
-   {:designed "~2 years full-time"
-    :actual "≈4.6 years"
-    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
+   ;; §8 reframe: show the INTENDED full-time length, not the misleading "≈4.6 yr" school-wide
+   ;; average or the graduates/year count. On-time actions render alongside (§6.4).
+   :time-to-credential {:intended "2 years, full-time"}})
 
 ;; --- Colleges tab · technical associate: BRCC Process Technology (CIP 15.0699) -
 ;; NAME OVERRIDE (Upgrade §4.3): the raw CIP title is "Industrial Production Technologies";
@@ -495,10 +552,11 @@
    :cip-title "Industrial Production Technologies"      ;; raw CIP 15.0699 title (fallback when no override)
    :acronym "PTEC"
    :track "Industrial Production Technologies/Technicians" :credential-level "Associate's"
+   :category :career-technical :terminal? true :rules-type :aas :tags ["Terminal"]   ;; §2/§3
    :cip "15.0699" :field "Process Technology" :primary-soc "51-8091"
    :lwc-stars 5
    :completions {:per-year 29 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 15.0699 Associate, BRCC)
-   :sections [:overview :salary :careers :time-to-credential]
+   :sections [:overview :salary :careers :rules :time-to-credential]
    :overview
    {:credential-line
     (str "A ~2-year associate that trains you to run and monitor the automated systems in "
@@ -526,19 +584,22 @@
                       :desc "Operate the units that refine crude oil into fuels and products — median $95,552."}
                      {:title "Chemical Equipment Operators & Tenders" :soc "51-9011.00"
                       :desc "Operate equipment that mixes, reacts, or processes chemicals — median $80,840."}]}
-   :time-to-credential
-   {:designed "~2 years full-time"
-    :actual "≈4.6 years"
-    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
+   ;; §8 reframe: show the INTENDED full-time length, not the misleading "≈4.6 yr" school-wide
+   ;; average or the graduates/year count. On-time actions render alongside (§6.4).
+   :time-to-credential {:intended "2 years, full-time"}})
 
 ;; --- Colleges tab · transfer associate: BRCC Business (Louisiana Transfer) ----
 (def business-transfer
   {:id "business-transfer" :school :brcc :type :transfer
    :name "Business (Louisiana Transfer)" :acronym nil
    :track "Business/Commerce, General" :credential-level "Associate's (transfer-designed)"
+   ;; Classification (§3): transfer-designed (AS/AA-LT); BOR designates it a Louisiana Transfer
+   ;; degree → both tags. Belongs under Degree (§2) alongside bachelor's. Transfer-associate rules.
+   :category :degree :transfer? true :rules-type :transfer-associate
+   :tags ["Transfer-designed" "Louisiana Transfer"]
    :cip "52.0101" :field "Business"
    :completions {:per-year 56 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 52.0101 Associate, BRCC)
-   :sections [:overview :transfer-plan :time-to-credential]
+   :sections [:overview :transfer-plan :rules :time-to-credential]
    :overview
    {:credential-line
     (str "A transfer-designed associate built to move toward a Business Administration "
@@ -563,32 +624,25 @@
    ;; School-level time-to-degree applies to the transfer associate too (it IS a BRCC
    ;; associate) — same CMPLTTD institution figure as ASN/Industrial. Answers "why is
    ;; there no time under Time & Completion": the time cards now render with the 56 completions.
-   :time-to-credential
-   {:designed "~2 years full-time"
-    :actual "≈4.6 years"
-    :actual-note "School-wide average across ALL of BRCC's associate programs (program-specific timing isn't published) — first-time, full-time completers. Actual pace runs longer than the 2-year design because students often attend part-load or stop out. Source: LA Board of Regents time-to-degree (CMPLTTD), 2024-25."}})
+   ;; §8 reframe: show the INTENDED full-time length, not the misleading "≈4.6 yr" school-wide
+   ;; average or the graduates/year count. On-time actions render alongside (§6.4).
+   :time-to-credential {:intended "2 years, full-time"}})
 
 ;; --- Short-Term tab · Technical Diploma: BRCC Practical Nursing (LPN) ----------
 ;; BRCC confers a Technical Diploma (TD) in Practical Nursing — a five-semester, 59-credit
 ;; program (mybrcc.edu catalog), NCLEX-PN eligible → Licensed Practical Nurse. NOT a "certificate".
 (def lpn
-  {:id "lpn" :type :technical-diploma :provider "Baton Rouge Community College"
-   :name "Licensed Practical/Vocational Nurse" :acronym "LPN"
+  {:id "lpn" :type :technical-diploma :school :brcc :provider "Baton Rouge Community College"
+   :name "Licensed Practical/Vocational Nurse" :acronym "LPN" :track "Practical Nursing"
    :credential-level "Technical Diploma" :location "Baton Rouge, LA"
+   ;; Now a BRCC school-anchored pathway (§5.4 — shares BRCC's cost bar, not a separate layout).
+   :category :career-technical :terminal? true :rules-type :certificate :tags ["Terminal"]   ;; §2/§3
    :cip "51.3901" :field "Nursing" :primary-soc "29-2061"
    :lwc-stars 4
-   :info-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; program_url
+   :program-url "https://mybrcc.edu/academics/nursing-and-allied-health/tdpracticalnursing.php"  ;; §6.6 Overview link
    :completions {:per-year 24 :year "2024"}    ;; program-specific (BOR CMPLRACE, CIP 51.3901, BRCC)
-   ;; Designed (nominal) length only — a typical ACTUAL time-to-completion isn't in the repo for
-   ;; sub-associate credentials: CMPLTTD (time-to-degree) has only Associate + Baccalaureate sheets.
-   ;; Length sourced from BRCC's catalog (five-semester, 59-credit TD in Practical Nursing).
-   :time-to-credential
-   {:designed "5 semesters"
-    :actual-note (str "Designed length is the nominal full-time program (BRCC catalog: a five-semester, "
-                      "59-credit Technical Diploma in Practical Nursing). A typical actual time-to-completion "
-                      "isn't shown — the state time-to-degree data (CMPLTTD) covers only associate and "
-                      "bachelor's degrees, not certificate/diploma programs.")}
-   :sections [:overview :salary :careers :time-to-credential :funding]
+   :time-to-credential {:intended "5 semesters, full-time"}   ;; §8 (BRCC catalog: 5-semester, 59-credit TD)
+   :sections [:overview :salary :careers :rules :time-to-credential]
    :overview
    {:credential-line
     (str "A five-semester Technical Diploma that qualifies you to sit for the NCLEX-PN and work "
@@ -610,21 +664,22 @@
             :living-wage-band "Near"            ;; $39,496 Y1 vs BR $45,496 = −13% → Near (within ±15%)
             :growth-rate "+7.48%" :growth-net-new "1,439" :growth-openings "16,532"}   ;; SOC 29-2061
    :careers {:roles [{:title "Licensed Practical Nurse (LPN)" :soc "29-2061.00"
-                      :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}
-   :funding {:tuition 4419 :tuition-flag "BOR FY26, tuition & fees"   ;; BOR FY26 (was Scorecard tuition-only)
-             :pell 7395 :tops "TOPS-Tech eligible" :commuter? true}})
+                      :desc "Provides basic nursing care under RNs and physicians. Requires passing the NCLEX-PN."}]}})
 
 ;; --- Short-Term tab · apprenticeship: Electrical (Baton Rouge Electrical JATC) -
 (def electrical-apprenticeship
   {:id "electrical-appr" :type :apprenticeship :provider "Baton Rouge Electrical JATC"
    :name "Electrical Apprenticeship" :location "Baton Rouge, LA"
+   ;; Standalone provider (a JATC, not a college) → renders as a standalone card, no About/Cost.
+   :category :career-technical :rules-type :apprenticeship
+   :tags ["Registered Apprenticeship" "Earn while you learn"]   ;; §2/§3
    :field "Electrical" :primary-soc "47-2111"     ;; CIP 99.0 (unmapped) → SOC from the trade
    :credential-level "Registered Apprenticeship" :lwc-stars 5
    ;; Verified BR Electrical JATC page (the data field's slug pointed to Alexandria).
-   :info-url "https://apprenticeshipla.com/apprenticeships/baton-rouge-electrical-jatc/"
+   :program-url "https://apprenticeshipla.com/apprenticeships/baton-rouge-electrical-jatc/"  ;; §6.6 Overview link
    ;; Apprenticeship wage progression IS in louisiana_programs for this JATC.
    :wage-progression {:start "$17.74/hr" :average "$28.16/hr"}
-   :sections [:overview :salary :careers :earn]
+   :sections [:overview :salary :careers :rules :earn]
    :overview
    {:credential-line
     (str "A registered apprenticeship: you're paid to work alongside licensed electricians "
@@ -691,11 +746,20 @@
    :tips ["Open to any field — apply regardless of your major."
           "It's decided on an essay, so put real effort into a strong personal statement."]})
 
-;; --- Tab registry -------------------------------------------------------------
-;; Colleges = schools (each with pathways). Short-Term = standalone programs.
-;; Scholarships = scholarship cards.
-(def colleges-schools [school brcc])
-(def college-pathways {"160612" pathways                       ;; SLU
-                       "437103" [asn process-tech business-transfer]})  ;; BRCC
-(def short-term-programs [lpn electrical-apprenticeship])
+;; --- Category registry (Upgrade §2) -------------------------------------------
+;; Programs group by :category (:degree / :career-technical), NOT by length. A tab shows the
+;; school tiles whose pathways fall in that category (school-anchored About/Cost render per
+;; school), plus any standalone-provider programs in that category. LPN is now a BRCC pathway;
+;; the apprenticeship (a JATC, not a college) is standalone (no About/Cost — earn-while-learn).
+(def schools [school brcc])                         ;; school records, in display order
+(def school-programs {"160612" pathways             ;; SLU: [bsn]
+                      "437103" [asn process-tech business-transfer lpn]})  ;; BRCC (LPN included)
+(def standalone-programs [electrical-apprenticeship])  ;; provider-only (no college About/Cost)
+
+;; The three tabs (Upgrade §2). :category matches program :category; :scholarships is special.
+(def categories
+  [{:key :degree           :label "Degree"           :category :degree}
+   {:key :career-technical :label "Career-Technical" :category :career-technical}
+   {:key :scholarships     :label "Scholarships"}])
+
 (def scholarship-list [jane-delano-scholarship career-mobility-scholarship flight-away-scholarship])

@@ -102,7 +102,10 @@
             "The degree alone doesn't license you — you also pass the "
             ($ ext-link {:href (:url lic) :label (:name lic)
                          :title (str (:name lic) " — " (:note lic))})
-            ", " (:note lic) ".")))))
+            ", " (:note lic) "."))
+       ;; §6.6 — every Overview links to the program page (program_url), omitted when absent.
+       (when-let [u (:program-url pathway)]
+         ($ ext-link {:href u :label "See the full program page →" :title (:name pathway)})))))
 
 ;; ============================================================================
 ;; Section 2 — What's Cool About This Pathway (≤4 qualitative callouts)
@@ -304,71 +307,53 @@
      (when sub ($ :div {:class "text-xs text-[#676868] mt-1 leading-snug"} sub))))
 
 (defui about-school-section
-  "School-anchored 'About This School' — INSTITUTION-AGNOSTIC. The 3-figure callout and
-   the narrative bullets are assembled from whatever the school record carries, so a
-   selective 4-year (acceptance + ACT/STR) and an open-admission 2-year (grad rate +
-   transfer-out) render through the same code with no per-school branch."
+  "School-anchored 'About This School' — SIX hero stat boxes (Upgrade §5.2), no prose. Assembled
+   from whatever the school carries, so a selective 4-year (Acceptance) and an open-admission
+   2-year (Transfer-Out) share the code. Boxes: [Acceptance | Transfer-Out] · Graduation Rate
+   (normed) · dynamic Student-Group Enrollment (§4.6) · Avg Debt at Graduation · First-Year
+   Retention · Campus (setting + distance-when-relevant). The old prose bullets + 'Target' line
+   are dropped (§5.2); the STR badge still lives on the school tile header."
   [{:keys [school student]}]
   (let [selective? (some? (:act-25 school))
-        cls (when selective? (data/classify-str (:act student) (:act-25 school) (:act-75 school)))
         gr (:grad-rate school)
         gcolor (case (:indicator gr) "High" "#2f9e44" "Low" "#c92a4a" "#676868")
         to (:transfer-out school)
         total (.toLocaleString (:enrollment-total school) "en-US")
-        ;; Dynamic enrollment box (§4.6): key to the STUDENT's own race; fall back to total
-        ;; enrollment for a non-minority student or when race isn't given.
         race (:race-group student)
         grp (get (:enrollment-races school) race)
-        enroll-fig (if (and (:minority? student) grp)
-                     {:value (:pct grp)
-                      :label (str race " enrollment")
-                      :sub (str (.toLocaleString (:count grp) "en-US") " of " total " students")}
-                     {:value total :label "Total enrollment"})
-        ;; Build the figure set from available data: selective → Acceptance; always grad
-        ;; rate (when present); 2-year → Transfer-Out; always enrollment. 4-yr = 3 figs,
-        ;; 2-yr = 3 figs.
+        debt (:avg-debt (:costs school))
+        usd (fn [n] (str "$" (.toLocaleString n "en-US")))
+        loc (str (:city school) ", " (:state school)
+                 (when (:distance-relevant? school) (str " · " (:distance school))))
         figs (cond-> []
+               ;; Box 1 — Acceptance (selective) OR Transfer-Out (open-admission)
                (and selective? (:acceptance school))
                (conj {:value (:acceptance school) :label "Acceptance Rate"})
+               (and (not selective?) to)
+               (conj {:value (:rate to) :label "Transfer-Out Rate" :sub (:sub to)})
+               ;; Box 2 — Graduation rate + norm
                gr
                (conj {:value (:rate gr) :label (:label gr)
                       :indicator {:label (:indicator gr) :color gcolor}
                       :sub (str (:delta gr) " pts vs. " (:normed-against gr) " (avg " (:peer-average gr) "%)")})
-               to
-               (conj {:value (:rate to) :label "Transfer-Out Rate" :sub (:sub to)})
-               :always
-               (conj enroll-fig))]
-    ($ :div {:class "space-y-4"}
-       ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-3"}
-          (for [[i f] (map-indexed vector figs)]
-            ($ callout-figure (assoc f :key i))))
-       ($ bullet-list
-          {:bullets
-           [;; Location / setting (+ campus-life link when a school has one)
-            (if (:campus-life-url school)
-              ($ :span nil
-                 (str "Located " (:distance school) " — " (:setting school) ". See ")
-                 ($ ext-link {:href (:campus-life-url school) :label "campus life"
-                              :title (str (:short-name school) " — campus life")})
-                 ".")
-              (str "Located " (:distance school) " — " (:setting school) "."))
-            ;; Admission framing: STR match (selective) OR open-admission note
-            (if selective?
-              (str "Your ACT of " (:act student) " falls in this school's middle 50% (25th–75th: "
-                   (:act-25 school) "–" (:act-75 school) "), so you're a " (:label cls)
-                   " here — admission is very likely and a good academic match.")
-              (str "This is an open-admission school — there's no ACT or GPA cutoff. If you have a high "
-                   "school diploma or equivalency you can enroll, which makes it an accessible, lower-risk "
-                   "way to begin."))
-            ;; Transfer-out (community colleges) — school-specific, sourced
-            (when to
-              (str "About " (:rate to) " of first-time students transfer out to continue their education "
-                   "at another institution " (:timeframe to) " — many use " (:short-name school)
-                   " as an affordable launchpad toward a bachelor's (IPEDS)."))
-            ;; First-year retention (both, when present)
-            (when (:retention school)
-              (str "About " (:retention school) " of first-time, full-time students return for their "
-                   "second year (IPEDS retention)."))]}))))
+               ;; Box 3 — dynamic student-group enrollment (§4.6)
+               true
+               (conj (if (and (:minority? student) grp)
+                       {:value (:pct grp) :label (str race " enrollment")
+                        :sub (str (.toLocaleString (:count grp) "en-US") " of " total)}
+                       {:value total :label "Total enrollment"}))
+               ;; Box 4 — average debt at graduation (Scorecard GRAD_DEBT_MDN)
+               debt
+               (conj {:value (usd debt) :label "Avg Debt at Graduation" :sub "median, completers"})
+               ;; Box 5 — first-year retention
+               (:retention school)
+               (conj {:value (:retention school) :label "First-Year Retention"})
+               ;; Box 6 — campus setting + location (distance only when relevant)
+               (:setting-type school)
+               (conj {:value (:setting-type school) :label "Campus" :sub loc}))]
+    ($ :div {:class "grid grid-cols-2 md:grid-cols-3 gap-3"}
+       (for [[i f] (map-indexed vector figs)]
+         ($ callout-figure (assoc f :key i))))))
 
 ;; ============================================================================
 ;; Section 6 — What It Costs You (school-anchored; recomputed waterfall)
@@ -408,23 +393,11 @@
                    :value coa :label (usd coa) :fill charts/color-earnings}
                   {:name (str "After\n" (:tops-name c)) :value after-tops :label (usd after-tops) :fill charts/color-earnings}
                   {:name "Your Net Cost\n(after Pell)" :value net :label (usd net) :fill charts/color-net}]})
+       ;; §5.3 — numeric detail is folded into the graph; keep only ACTION bullets.
        ($ bullet-list
           {:bullets
-           [(if living
-              (str "The full cost to attend for one year is about " (usd coa) " — " cost-words ".")
-              (str "Tuition, fees, and books for one year come to about " (usd coa) "."))
-            (if fully-covered?
-              (str (:tops-name c) " plus the Pell Grant cover all of it — together they fully cover your "
-                   "tuition, fees, and books, with Pell typically left over to help with other expenses.")
-              (str (:tops-name c) " plus the Pell Grant cover about " (usd (:aid-covered c)) " of that"
-                   (when (>= (:aid-covered c) direct)
-                     (str " — together they more than cover tuition, fees, and books (" (usd direct) ")"))
-                   "."))
-            (if fully-covered?
-              "That leaves an estimated $0 out of pocket for tuition, fees, and books."
-              (str "That leaves an estimated net cost of about " (usd net) " for the year."))
-            (when (:avg-debt c)
-              (str "Average student debt at graduation is about " (usd (:avg-debt c)) "."))]})
+           ["Lower your net cost: live at home instead of on campus, and apply for scholarships (see the Scholarships tab)."
+            "Loans can cover what's left — but they're borrowed money you repay with interest, a deferred cost, not free aid."]})
        ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4"}
           ($ :p {:class "text-sm text-[#9a6a00] leading-relaxed"}
              ($ :span {:class "font-bold"} "This is an estimate only. ")
@@ -445,27 +418,33 @@
 ;; ============================================================================
 
 (defui time-to-credential-section [{:keys [pathway]}]
-  ;; School-level time-to-degree (BOR CMPLTTD, when available) + PROGRAM-level
-  ;; completions/year (BOR CMPLRACE, by CIP). Each card only shows when its data exists.
-  (let [t (:time-to-credential pathway)
-        c (:completions pathway)
-        cards (cond-> []
-                (:designed t) (conj [(:designed t) "Designed length"])
-                (:actual t)   (conj [(:actual t) "Typical actual"])   ;; only when an actual time exists (degrees; not certs)
-                c             (conj [(str (:per-year c)) "Graduates / year"]))
-        cols (case (count cards) 1 "grid-cols-1" 2 "grid-cols-2" "grid-cols-3")]
-    ($ :div {:class "space-y-3"}
-       ($ :div {:class (str "grid gap-3 " cols)}
-          (for [[i [v lbl]] (map-indexed vector cards)]
-            ($ :div {:key i :class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4 text-center"}
-               ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} v)
-               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"} lbl))))
-       (when (:actual-note t)
-         ($ :p {:class "text-xs text-[#676868] leading-relaxed"} (:actual-note t)))
-       (when c
-         ($ :p {:class "text-xs text-[#676868] leading-relaxed"}
-            (str "Graduates / year is program-specific — " (:per-year c) " completers in " (:year c)
-                 " (BOR completions by CIP, CMPLRACE)."))))))
+  ;; §8 reframe: the INTENDED full-time length + the universal on-time actions (§6.4). No
+  ;; misleading average-completion figure, no annual-graduates count. Standardized across all
+  ;; program types (Degree, AAS, certificate/diploma, transfer associate, apprenticeship).
+  (let [t (:time-to-credential pathway)]
+    ($ :div {:class "space-y-4"}
+       (when (:intended t)
+         ($ :div {:class "bg-[#f3fafb] rounded-xl shadow-sm ring-1 ring-[#cdeaee] p-4 text-center"}
+            ($ :div {:class "text-2xl font-bold text-[#2a6465] font-head"} (:intended t))
+            ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mt-1"}
+               "Intended length (full-time)")))
+       ($ :div {:class "space-y-2"}
+          ($ :div {:class "text-sm font-semibold text-[#2a6465] font-head"} "Finish on time — the moves that matter")
+          ($ bullet-list {:bullets data/on-time-actions})))))
+
+(defui rules-section [{:keys [pathway]}]
+  ;; §6: plain-language "Terminal" definition (§6.1) OR transfer-risk warning (§6.2), by flag,
+  ;; then the rules-of-the-game (§6.3) for this pathway's :rules-type. Institution-agnostic.
+  (let [rules (get data/rules-of-game (:rules-type pathway))]
+    ($ :div {:class "space-y-4"}
+       (when (:terminal? pathway)
+         ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-4 text-sm text-[#313335] leading-relaxed"}
+            ($ :span {:class "font-semibold text-[#2a6465]"} "What \"terminal\" means: ") data/terminal-def))
+       (when (:transfer? pathway)
+         ($ :div {:class "rounded-xl bg-[#fff7e6] border border-[#e8a93b] p-4 text-sm text-[#9a6a00] leading-relaxed"}
+            data/transfer-risk))
+       (when (seq rules)
+         ($ bullet-list {:bullets rules})))))
 
 (defui transfer-plan-section [{:keys [pathway]}]
   (let [tp (:transfer-plan pathway)
@@ -557,6 +536,7 @@
    :careers            {:heading "Career Paths"                  :render careers-section}
    :time-to-credential {:heading "Time & Completion"            :render time-to-credential-section}
    :transfer-plan      {:heading "Transfer Plan"                 :render transfer-plan-section}
+   :rules              {:heading "Making It Pay Off"            :render rules-section}
    :funding            {:heading "Cost & Funding"               :render funding-section}
    :earn               {:heading "Earn While You Learn"         :render earn-section}})
 
@@ -567,8 +547,8 @@
   [{:keys [pathway school student]}]
   ;; Per-pathway :sections drives which sections show (CTE programs differ from the
   ;; 4-year); falls back to the global section-order so the existing SLU BSN is unchanged.
-  ($ accordion/Accordion {:type "single" :collapsible true :default-value "overview"
-                          :class "space-y-3"}
+  ;; §5.1 — sub-sections start COLLAPSED (snapshot view); no auto-unfurled Overview.
+  ($ accordion/Accordion {:type "single" :collapsible true :class "space-y-3"}
      (for [k (or (:sections pathway) data/section-order)
            :let [{:keys [heading render]} (pathway-section-meta k)]]
        ($ section-item {:key (name k) :value (name k) :heading heading}
@@ -604,8 +584,10 @@
              ($ :div {:class "font-semibold text-[#2a6465] font-head"}
                 (str (:name pathway) (when (:acronym pathway) (str " (" (:acronym pathway) ")"))))
              ($ :div {:class "text-sm text-[#676868] mt-0.5"} (:track pathway))
-             ;; Per-pathway chips (field · credential · demand) — derived, not hardcoded.
+             ;; Classification tags (§3, amber) + derived chips (field · credential · demand, teal).
              ($ :div {:class "flex flex-wrap gap-2 mt-2"}
+                (for [t (:tags pathway)]
+                  ($ :span {:key t :class "rounded-full bg-[#fff7e6] text-[#9a6a00] ring-1 ring-[#e8a93b] text-xs font-semibold px-2.5 py-0.5"} t))
                 (for [t (pathway-chips pathway)]
                   ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t))))
           ($ :span {:class "shrink-0 text-sm font-semibold text-[#007f81]"}
@@ -620,32 +602,31 @@
    fields the school record carries, not by school type. A 2-year that lacks a field (e.g.
    acceptance rate for an open-admission college) simply omits that figure."
   [{:keys [school student]}]
-  ($ accordion/Accordion {:type "multiple" :default-value #js ["about-school" "costs"]
-                          :class "space-y-3"}
+  ;; §5.1 — About This School + What It Costs You start COLLAPSED (no auto-unfurl).
+  ($ accordion/Accordion {:type "multiple" :class "space-y-3"}
      ($ section-item {:value "about-school" :heading "About This School" :tint? true}
         ($ about-school-section {:school school :student student}))
      ($ section-item {:value "costs" :heading "What It Costs You" :tint? true}
         ($ costs-section {:school school}))))
 
 (defui school-expanded
-  "What unfurls under a school tile: the recommended pathways (each unfurls its own
-   sections) followed by the school-anchored About This School + What It Costs You."
-  [{:keys [school student]}]
-  (let [ps (get data/college-pathways (:unitid school) [])]
-    ($ :div {:class "space-y-5"}
-       ($ :div {:class "space-y-3"}
-          ($ section-eyebrow {:label (str (count ps) " Recommended Pathway"
-                                          (when (> (count ps) 1) "s"))})
-          ;; Pathways start COLLAPSED — the student clicks one to unfurl its details.
-          (for [p ps]
-            ($ pathway-row {:key (:id p) :pathway p :school school :student student :default-open? false})))
-       ($ school-sections {:school school :student student}))))
+  "What unfurls under a school tile: the recommended pathways FOR THE CURRENT CATEGORY (each
+   unfurls its own sections) followed by the school-anchored About This School + What It Costs You."
+  [{:keys [school pathways student]}]
+  ($ :div {:class "space-y-5"}
+     ($ :div {:class "space-y-3"}
+        ($ section-eyebrow {:label (str (count pathways) " Recommended Pathway"
+                                        (when (> (count pathways) 1) "s"))})
+        ;; Pathways start COLLAPSED — the student clicks one to unfurl its details (§5.1).
+        (for [p pathways]
+          ($ pathway-row {:key (:id p) :pathway p :school school :student student :default-open? false})))
+     ($ school-sections {:school school :student student})))
 
 ;; ============================================================================
 ;; School tile (Pathway Recommendations) — Learn More expander
 ;; ============================================================================
 
-(defui school-tile [{:keys [school student]}]
+(defui school-tile [{:keys [school pathways student]}]
   (let [[open? set-open!] (use-state false)
         cls (data/classify-str (:act student) (:act-25 school) (:act-75 school))]
     ($ card/Card {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#d0ecef] border-0 overflow-hidden"}
@@ -678,7 +659,7 @@
        (when open?
          ($ :div {:class "px-3 md:px-5 pb-5 pt-1 bg-[#f2f3f4]"}
             ($ :div {:class "pt-4"}
-               ($ school-expanded {:school school :student student})))))))
+               ($ school-expanded {:school school :pathways pathways :student student})))))))
 
 ;; ============================================================================
 ;; Left column — Advisor Messages
@@ -732,9 +713,9 @@
              ($ :dt {:class "font-semibold text-[#313335] inline"} (str term ": "))
              ($ :dd {:class "inline text-[#676868]"} def))))))
 
-;; --- Short-Term program card (certificate / apprenticeship) — standalone, reuses
-;;     the same section system as a school's pathway, with the provider shown. ---
-(defui short-term-card [{:keys [program student default-open?]}]
+;; --- Standalone program card (provider-only, e.g. an apprenticeship at a JATC) — reuses the
+;;     same section system as a school pathway, with the provider shown, but no About/Cost. ---
+(defui standalone-card [{:keys [program student default-open?]}]
   (let [[open? set-open!] (use-state (boolean default-open?))]
     ($ :div {:class "bg-white rounded-xl shadow-sm ring-1 ring-[#bcdfe5] overflow-hidden"}
        ($ :button {:class "w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-[#f3fafb] transition-colors"
@@ -745,38 +726,44 @@
              ($ :div {:class "text-sm text-[#676868] mt-0.5"}
                 (str (:provider program) " · " (:credential-level program)))
              ($ :div {:class "flex flex-wrap gap-2 mt-2"}
+                (for [t (:tags program)]
+                  ($ :span {:key t :class "rounded-full bg-[#fff7e6] text-[#9a6a00] ring-1 ring-[#e8a93b] text-xs font-semibold px-2.5 py-0.5"} t))
                 (for [t (pathway-chips program)]
                   ($ :span {:key t :class "rounded-full bg-[#d0ecef] text-[#007f81] text-xs font-medium px-2.5 py-0.5"} t))))
           ($ :span {:class "shrink-0 text-sm font-semibold text-[#007f81]"}
              (if open? "Hide ▲" "View ▼")))
        (when open?
-         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4] space-y-3"}
-            ($ pathway-sections {:pathway program :school nil :student student})
-            (when (:info-url program)
-              ($ :div {:class "px-1"}
-                 ($ ext-link {:href (:info-url program)
-                              :label "Learn more about this program →"
-                              :title (:provider program)}))))))))
+         ($ :div {:class "px-3 md:px-4 pb-4 pt-2 bg-[#f2f3f4]"}
+            ($ pathway-sections {:pathway program :school nil :student student}))))))
 
-;; --- Scholarship card (mirrors the production card shape) ---
+;; --- Scholarship card — EXPANDABLE like program cards (§5.5); advisor-verified (§9). ---
 (defui scholarship-card [{:keys [s]}]
-  ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#bcdfe5] p-5 space-y-3"}
-     ($ :div {:class "flex items-start justify-between gap-3"}
-        ($ :div {:class "min-w-0"}
-           ($ :div {:class "font-semibold text-[#2a6465] font-head text-base"} (:name s))
-           ($ :div {:class "text-sm text-[#676868]"} (:sponsor s)))
-        ($ :div {:class "text-right shrink-0"}
-           ($ :div {:class "text-xl font-bold text-[#05a09c] font-head"} (:award s))
-           ($ :div {:class "text-xs text-[#676868]"} (str "Due " (:deadline s)))))
-     ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-3 text-sm text-[#313335] leading-relaxed"}
-        ($ :span {:class "font-semibold text-[#2a6465]"} "Why it fits: ") (:why-fits s))
-     ($ bullet-list {:bullets [(str "Eligibility: " (:eligibility s))
-                               (str "Open to: " (:target-levels s) " students")
-                               (:selection s)]})
-     ($ :div
-        ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-1"} "Application tips")
-        ($ bullet-list {:bullets (:tips s)}))
-     ($ ext-link {:href (:url s) :label "Apply / learn more →" :title (:name s)})))
+  (let [[open? set-open!] (use-state false)]
+    ($ :div {:class "bg-white rounded-2xl shadow-sm ring-1 ring-[#bcdfe5] overflow-hidden"}
+       ($ :button {:class "w-full text-left p-5 hover:bg-[#f3fafb] transition-colors"
+                   :on-click #(set-open! not)}
+          ($ :div {:class "flex items-start justify-between gap-3"}
+             ($ :div {:class "min-w-0"}
+                ($ :div {:class "font-semibold text-[#2a6465] font-head text-base"} (:name s))
+                ($ :div {:class "text-sm text-[#676868]"} (:sponsor s)))
+             ($ :div {:class "text-right shrink-0"}
+                ($ :div {:class "text-xl font-bold text-[#05a09c] font-head"} (:award s))
+                ($ :div {:class "text-xs text-[#676868]"} (str "Due " (:deadline s)))))
+          ($ :div {:class "mt-2 flex items-center justify-between gap-2"}
+             ($ :span {:class "rounded-full bg-[#eef6ee] text-[#2f7d32] ring-1 ring-[#bfe0c0] text-[11px] font-semibold px-2 py-0.5"}
+                "Advisor-verified")
+             ($ :span {:class "text-sm font-semibold text-[#007f81]"} (if open? "Hide ▲" "Details ▼"))))
+       (when open?
+         ($ :div {:class "px-5 pb-5 space-y-3"}
+            ($ :div {:class "rounded-xl bg-[#d0ecef]/50 p-3 text-sm text-[#313335] leading-relaxed"}
+               ($ :span {:class "font-semibold text-[#2a6465]"} "Why it fits: ") (:why-fits s))
+            ($ bullet-list {:bullets [(str "Eligibility: " (:eligibility s))
+                                      (str "Open to: " (:target-levels s) " students")
+                                      (:selection s)]})
+            ($ :div
+               ($ :div {:class "text-xs font-semibold uppercase tracking-wide text-[#676868] mb-1"} "Application tips")
+               ($ bullet-list {:bullets (:tips s)}))
+            ($ ext-link {:href (:url s) :label "Apply / learn more →" :title (:name s)}))))))
 
 ;; --- Tabs ---
 (defui tab-button [{:keys [label active? on-click]}]
@@ -785,39 +772,45 @@
               :on-click on-click}
      label))
 
-(defui colleges-tab [{:keys [student]}]
-  ($ :div {:class "space-y-4"}
-     ($ str-legend)
-     ($ :div {:class "space-y-3"}
-        ($ section-eyebrow {:label "Pathway Recommendations"})
-        (for [sch data/colleges-schools]
-          ($ school-tile {:key (:unitid sch) :school sch :student student})))
-     ($ terms-to-know)))
-
-(defui short-term-tab [{:keys [student]}]
-  ($ :div {:class "space-y-3"}
-     ($ section-eyebrow {:label "Short-Term Training"})
-     (for [p data/short-term-programs]
-       ($ short-term-card {:key (:id p) :program p :student student}))))
+(defui category-tab
+  "A Degree or Career-Technical tab (Upgrade §2). Shows the school tiles whose pathways fall in
+   this category (school-anchored About/Cost per school), then any standalone-provider programs.
+   A school appears in a tab only if it has ≥1 pathway there — so BRCC shows in both tabs (with
+   different pathways each) and its About/Cost renders in each."
+  [{:keys [category student]}]
+  (let [school-groups (for [s data/schools
+                            :let [ps (filter #(= category (:category %)) (get data/school-programs (:unitid s)))]
+                            :when (seq ps)]
+                        {:school s :pathways ps})
+        standalones (filter #(= category (:category %)) data/standalone-programs)]
+    ($ :div {:class "space-y-4"}
+       ($ str-legend)
+       ($ :div {:class "space-y-3"}
+          ($ section-eyebrow {:label "Pathway Recommendations"})
+          (for [{:keys [school pathways]} school-groups]
+            ($ school-tile {:key (:unitid school) :school school :pathways pathways :student student}))
+          (for [p standalones]
+            ($ standalone-card {:key (:id p) :program p :student student})))
+       ($ terms-to-know))))
 
 (defui scholarships-tab []
   ($ :div {:class "space-y-3"}
      ($ section-eyebrow {:label "Scholarships"})
+     ($ :p {:class "text-xs text-[#676868] leading-relaxed"}
+        "Scholarships are advisor-verified and change often — your advisor keeps this list current and can add their own.")
      (for [s data/scholarship-list]
        ($ scholarship-card {:key (:id s) :s s}))))
 
 (defui recommendations-column [{:keys [student]}]
-  (let [[tab set-tab!] (use-state :colleges)]
+  (let [[tab set-tab!] (use-state :degree)]
     ($ :div {:class "space-y-4"}
        ($ :h2 {:class "text-xl font-semibold text-[#2a6465] font-head"} "Check these out:")
        ($ :div {:class "flex gap-1 bg-white rounded-xl ring-1 ring-[#d0ecef] p-1"}
-          ($ tab-button {:label "Colleges"     :active? (= tab :colleges)     :on-click #(set-tab! :colleges)})
-          ($ tab-button {:label "Short-Term"   :active? (= tab :short-term)   :on-click #(set-tab! :short-term)})
-          ($ tab-button {:label "Scholarships" :active? (= tab :scholarships) :on-click #(set-tab! :scholarships)}))
-       (case tab
-         :colleges     ($ colleges-tab {:student student})
-         :short-term   ($ short-term-tab {:student student})
-         :scholarships ($ scholarships-tab)))))
+          (for [{:keys [key label]} data/categories]
+            ($ tab-button {:key (name key) :label label :active? (= tab key) :on-click #(set-tab! key)})))
+       (if (= tab :scholarships)
+         ($ scholarships-tab)
+         ($ category-tab {:category tab :student student})))))
 
 ;; ============================================================================
 ;; Page
